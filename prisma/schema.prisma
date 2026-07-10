@@ -1,0 +1,59 @@
+// Database connection configuration vector
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Global User Account Table Matrix
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         Role        @default(CLIENT)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  proProfile   ProProfile?
+}
+
+enum Role {
+  CLIENT
+  PRO
+  ADMIN
+}
+
+// Specialized Fleet Professional Operational Metadata Node
+model ProProfile {
+  id              String         @id @default(uuid())
+  userId          String         @unique
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primarySkill    String?        @default("General Provider")
+  baseRate        String?        @default("£25")
+  operatingRadius String?        @default("UNKNOWN")       // Outward UK Postcode Block (e.g., "W1W")
+  addressVector   String?        @default("Not Specified")
+  isAutonomous    Boolean        @default(true)            // AI Twin Control Hook
+  services        ServiceNode[]
+  availability    Availability[]
+}
+
+// Individual Service Service Matrices
+model ServiceNode {
+  id           String     @id @default(uuid())
+  proProfileId String
+  proProfile   ProProfile @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
+  name         String
+  price        Float
+}
+
+// AI Twin Engine Master Scheduling Availability Calendar Blocks
+model Availability {
+  id           String     @id @default(uuid())
+  proProfileId String
+  proProfile   ProProfile @relation(fields: [proProfileId], references: [id], onDelete: Cascade)
+  dayOfWeek    Int        // 0 (Sunday) to 6 (Saturday)
+  startTime    String     // e.g., "09:00"
+  endTime      String     // e.g., "17:00"
+}

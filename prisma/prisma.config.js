@@ -1,0 +1,9 @@
+module.exports = {
+  schema: {
+    kind: 'local',
+    filePath: './prisma/schema.prisma',
+  },
+  datasource: {
+    url: "postgresql://postgres:postgres@localhost:5432/gnis_db?schema=public",
+  },
+};
