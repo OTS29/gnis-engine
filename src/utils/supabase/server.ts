@@ -1,4 +1,5 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient } from '@supabase/auth-helpers-nextjs'
+
 import { cookies } from 'next/headers';
 
 export async function createClient() {

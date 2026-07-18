@@ -566,6 +566,7 @@ export default function Home() {
     <div className="animate-marquee flex gap-6 whitespace-nowrap shrink-0 pr-6">
       {/* Product 1 */}
       <div className="w-64 bg-white rounded-2xl p-4 shadow-sm border border-zinc-100 flex flex-col justify-between hover:shadow-md transition-shadow duration-300">
+        
         <div className="w-full h-44 bg-zinc-100 rounded-xl mb-4 flex items-center justify-center text-zinc-400 font-medium text-xs tracking-wider uppercase">Premium Matte Clay</div>
         <div>
           <h4 className="font-semibold text-zinc-800 text-sm truncate">Styling Matte Clay (Strong Hold)</h4>
@@ -936,6 +937,7 @@ export default function Home() {
             <button key={t.id} onClick={() => setActiveTab(t.id)} className={`w-full text-left p-3 rounded-xl font-bold ${activeTab === t.id ? 'bg-indigo-600 shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}>{t.l}</button>
           ))}
         </nav>
+        
         <div className="p-4 space-y-2">
           <button onClick={() => setView('preview')} className="w-full bg-white text-black py-3 rounded-xl font-black shadow-lg hover:scale-105 transition-all">PREVIEW SITE</button>
           <button onClick={() => setView('landing')} className="w-full bg-slate-800 text-white py-2 rounded-xl text-xs font-bold uppercase tracking-widest">Log Out</button>
@@ -975,13 +977,14 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
               <div className="space-y-8">
                 <h2 className="text-4xl font-black">Site Builder Centre</h2>
+                <label className="text-xs font-black uppercase text-slate-700">Use The Site Builder centre to design How You want Your Website to Appear</label>
                 <div className="bg-white p-8 rounded-3xl border space-y-6 shadow-sm">
                   <div>
                     <label className="text-xs font-black uppercase text-slate-400">Business Brand Name</label>
                     <input value={businessName} onChange={(e)=>setBusinessName(e.target.value)} className="w-full p-4 border rounded-xl mt-1 bg-white text-black font-medium" />
                   </div>
                   <div>
-                    <label className="text-xs font-black uppercase text-slate-400">Address / Location Parameters</label>
+                    <label className="text-xs font-black uppercase text-slate-400">Add Address / Sort Code</label>
                     <input value={location} onChange={(e)=>setLocation(e.target.value)} className="w-full p-4 border rounded-xl mt-1 bg-white text-black font-medium" />
                   </div>
                   <div>
@@ -989,7 +992,7 @@ export default function Home() {
                     <textarea value={marketingText} onChange={(e)=>setMarketingText(e.target.value)} className="w-full p-4 border rounded-xl mt-1 h-20 bg-white text-black font-medium" />
                   </div>
                   <div>
-                    <label className="text-xs font-black uppercase text-slate-400">Background Canvas Image</label>
+                    <label className="text-xs font-black uppercase text-slate-400">Choose Your Background Image</label>
                     <input type="file" onChange={(e) => {
                       const f = e.target.files[0];
                       const r = new FileReader();
@@ -998,7 +1001,7 @@ export default function Home() {
                     }} className="w-full p-2 border rounded-xl mt-1 text-sm bg-white text-black" />
                   </div>
                   <div>
-                    <label className="text-xs font-black uppercase text-slate-400">System Color Palette Theme</label>
+                    <label className="text-xs font-black uppercase text-slate-400">Choose Your Website Color Palette Theme</label>
                     <div className="flex gap-4 mt-2">
                         {['bg-indigo-600', 'bg-rose-500', 'bg-emerald-600', 'bg-black'].map(c => (
                             <button key={c} onClick={() => {setThemeColor(c); setTextColor(c.replace('bg-', 'text-'))}} className={`w-10 h-10 rounded-full ${c} ${themeColor === c ? 'ring-4 ring-offset-2 ring-indigo-200' : ''}`} />
@@ -1012,17 +1015,18 @@ export default function Home() {
               <div className="space-y-8">
                 <h2 className="text-4xl font-black">Videos & Socials</h2>
                 <div className="bg-white p-8 rounded-3xl border shadow-sm space-y-4">
-                  <h3 className="font-bold text-slate-500">Social Media Links</h3>
+                  <h3 className="font-bold text-slate-500">Input Your Social Media Links</h3>
                   <input placeholder="Instagram Link" value={socialLinks.instagram} onChange={(e)=>setSocialLinks({...socialLinks, instagram: e.target.value})} className="w-full p-3 border rounded-xl bg-white text-black font-medium" />
                   <input placeholder="TikTok Link" value={socialLinks.tiktok} onChange={(e)=>setSocialLinks({...socialLinks, tiktok: e.target.value})} className="w-full p-3 border rounded-xl bg-white text-black font-medium" />
                   <input placeholder="Facebook Link" value={socialLinks.facebook} onChange={(e)=>setSocialLinks({...socialLinks, facebook: e.target.value})} className="w-full p-3 border rounded-xl bg-white text-black font-medium" />
                   
-                  <h3 className="font-bold text-slate-500 mt-4">YouTube Video URLs</h3>
+                  <h3 className="font-bold text-slate-500 mt-4">Input Your YouTube Video URLs</h3>
                   <input placeholder="Promo Video URL (Main Advert)" value={videoLinks.vid1} onChange={(e)=>setVideoLinks({...videoLinks, vid1: e.target.value})} className="w-full p-3 border rounded-xl bg-white text-black font-medium" />
                   <input placeholder="Secondary Video URL" value={videoLinks.vid2} onChange={(e)=>setVideoLinks({...videoLinks, vid2: e.target.value})} className="w-full p-3 border rounded-xl bg-white text-black font-medium" />
                 </div>
 
                 <h2 className="text-4xl font-black pt-4">Service Management</h2>
+                <h2 className="text-l font-black pt-4">Add Your Services & Prices</h2>
                 <form onSubmit={handleAddService} className="bg-white p-8 rounded-3xl border shadow-sm space-y-4">
                   <input name="sname" placeholder="Service Name" className="w-full p-4 border rounded-xl bg-white text-black font-medium" required />
                   <div className="flex gap-4">

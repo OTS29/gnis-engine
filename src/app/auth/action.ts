@@ -1,12 +1,11 @@
 'use server'
 
-// 1. Fixed Path: Using relative dots avoids alias resolution bugs
-import { createClient } from '../../utils/supabase/server';
+import { createClient } from '../../utils/supabase/server'
 import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: '2025-11-20'
-})
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string)
+
+
 
 // 2. Added Missing Login Export to clear your terminal warning
 export async function login(formData: FormData) {

@@ -1,17 +1,18 @@
-// 1. Define what a Product looks like (Reference only)
-// {
-//   id: string,
-//   name: string,
-//   price: number
-// }
+// 1. Define the Product type your component expects
+interface Product {
+  id: string
+  name: string
+  price: number
+  imageUrl?: string
+  categoryTag?: string
+}
 
 interface AutoscrollingProductsProps {
-  products: Product[]; // This comes dynamically from your dashboard/database
+  products: Product[] // Now TypeScript knows what Product is
 }
 
 export default function AutoscrollingProducts({ products }: AutoscrollingProductsProps) {
-  // Fallback if no products are loaded yet
-  if (!products || products.length === 0) return null;
+  if (!products || products.length === 0) return null
 
   return (
     <div className="w-full overflow-hidden bg-zinc-50 py-12 border-t border-gray-100">
@@ -19,11 +20,10 @@ export default function AutoscrollingProducts({ products }: AutoscrollingProduct
         <h3 className="text-xs uppercase tracking-widest font-bold text-gray-400">Trending Now</h3>
         <h2 className="text-2xl font-bold text-zinc-900 mt-1">Featured Essentials</h2>
       </div>
-      
-      {/* Marquee Container */}
+
       <div className="relative w-full flex overflow-x-hidden group py-4">
         
-        {/* TRACK 1: First iteration of dashboard products */}
+        {/* TRACK 1 */}
         <div className="animate-marquee flex gap-6 whitespace-nowrap shrink-0 pr-6">
           {products.map((product) => (
             <div 
@@ -45,7 +45,7 @@ export default function AutoscrollingProducts({ products }: AutoscrollingProduct
           ))}
         </div>
 
-        {/* TRACK 2: The exact duplicate array to create the endless illusion */}
+        {/* TRACK 2 */}
         <div className="animate-marquee flex gap-6 whitespace-nowrap shrink-0 pr-6" aria-hidden="true">
           {products.map((product) => (
             <div 
@@ -82,5 +82,5 @@ export default function AutoscrollingProducts({ products }: AutoscrollingProduct
         }
       `}</style>
     </div>
-  );
+  )
 }
