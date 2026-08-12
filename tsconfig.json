@@ -27,15 +27,20 @@
       "@/*": [
         "src/*"
       ]
-    }
+    },
+
+    "ignoreDeprecations": "6.0"
   },
+
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    "src/app/auth/login/route.js"
   ],
+
   "exclude": [
     "node_modules"
   ]
