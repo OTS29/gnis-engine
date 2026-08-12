@@ -1,4 +1,5 @@
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr';
+
 
 import { cookies } from 'next/headers';
 
