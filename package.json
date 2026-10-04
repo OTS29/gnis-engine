@@ -9,8 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.12.4",
-    "@supabase/supabase-js": "^2.108.1",
+    "@neondatabase/serverless": "^1.2.0",
     "bcryptjs": "^3.0.3",
     "dotenv": "^14.2.4",
     "gsap": "^3.15.0",
@@ -22,10 +21,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "25.9.1",
-    "@types/react": "19.2.16",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.16",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "typescript": "^6.0.3"
   }
 }

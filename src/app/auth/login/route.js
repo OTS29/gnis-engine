@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { createClient } from '@/utils/supabase/server'
+import { sql } from '@/lib/db'
+
+export const runtime = 'nodejs'
 
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { email, password } = body
+    const email = String(body.email || '').trim().toLowerCase()
 
-    const supabase = await createClient()
-
-    const { data: user } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single()
+    const [user] = await sql`select * from users where email = ${email} limit 1`
 
     if (!user) {
       return NextResponse.json(
@@ -23,7 +19,7 @@ export async function POST(request) {
       )
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash)
+    const isMatch = await bcrypt.compare(body.password || '', user.password_hash)
     if (!isMatch) {
       return NextResponse.json(
         { error: 'Invalid identity credentials' },
@@ -44,7 +40,7 @@ export async function POST(request) {
           id: user.id,
           name: user.name,
           role: user.role,
-          proProfile: user.proProfile
+          proProfile: user.pro_profile
         }
       },
       { status: 200 }
@@ -53,7 +49,7 @@ export async function POST(request) {
     response.cookies.set('gnis_session', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7,
       path: '/'
     })

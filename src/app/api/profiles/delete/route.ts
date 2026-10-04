@@ -1,15 +1,31 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import jwt from "jsonwebtoken";
+import { sql } from "@/lib/db";
+
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const { id } = await req.json();
+  try {
+    const token = req.cookies.get("gnis_session")?.value;
+    if (!token) return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
 
-  const { error } = await supabase
-    .from("pro_profiles")
-    .delete()
-    .eq("id", id);
+    let session: { userId: string };
+    try {
+      session = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    } catch {
+      return NextResponse.json({ ok: false, error: "Invalid session" }, { status: 401 });
+    }
 
-  return NextResponse.json({ ok: !error, error });
+    const { id } = await req.json();
+    if (!id) return NextResponse.json({ ok: false, error: "Missing id" }, { status: 400 });
+
+    const rows = await sql`
+      delete from pro_profiles where id = ${id} and user_id = ${session.userId} returning id`;
+
+    if (!rows.length) return NextResponse.json({ ok: false, error: "Profile not found" }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("PROFILE_DELETE_FAULT:", e);
+    return NextResponse.json({ ok: false, error: "Delete failed" }, { status: 500 });
+  }
 }

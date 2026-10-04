@@ -1,17 +1,23 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { sql } from "@/lib/db";
+
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
+  try {
+    const id = new URL(req.url).searchParams.get("id");
+    if (!id) return NextResponse.json({ ok: false, error: "Missing id" }, { status: 400 });
 
-  const { data, error } = await supabase
-    .from("pro_profiles")
-    .select("*")
-    .eq("id", id)
-    .single();
+    const [data] = await sql`
+      select id, user_id as "userId", primary_skill as "primarySkill", base_rate as "baseRate",
+             operating_radius as "operatingRadius", address_vector as "addressVector",
+             is_autonomous as "isAutonomous"
+      from pro_profiles where id = ${id}`;
 
-  return NextResponse.json({ ok: !error, data, error });
+    if (!data) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, data });
+  } catch (e) {
+    console.error("PROFILE_GET_FAULT:", e);
+    return NextResponse.json({ ok: false, error: "Could not load profile" }, { status: 500 });
+  }
 }
