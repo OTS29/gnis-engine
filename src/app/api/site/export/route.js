@@ -27,7 +27,7 @@ export async function GET(req) {
           coalesce(b.source, 'website') as source, b.date::text as date, left(b.time::text, 5) as time, lower(b.status) as status,
           to_char(b.created_at at time zone 'Europe/London', 'YYYY-MM-DD HH24:MI') as created
         from site_bookings b join sites st on st.id = b.site_id where st.owner_id = ${s.userId} order by b.date desc, b.time desc`;
-      const head = ['Ref', 'Customer', 'Contact', 'Service', 'Listed price (£)', 'Agreed price (£)', 'How booked', 'Service date', 'Service time', 'Status', 'Booked on'];
+      const head = ['Ref', 'Customer', 'Contact', 'Service', 'Listed price', 'Agreed price', 'How booked', 'Service date', 'Service time', 'Status', 'Booked on'];
       const data = rows.map((r) => [r.id, r.customer, r.contact, r.service, r.list_price ?? r.price, r.price, r.source === 'negotiated' ? 'Negotiated price' : 'Website', r.date, r.time, r.status, r.created]);
       const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
       ws['!cols'] = head.map((h, i) => ({ wch: [6, 22, 26, 24, 16, 16, 18, 14, 12, 12, 18][i] }));
@@ -44,7 +44,7 @@ export async function GET(req) {
         ['Approved', count('approved')],
         ['Completed', count('completed')],
         ['Cancelled', count('cancelled')],
-        ['Value of approved + completed (£)', Math.round(earned * 100) / 100],
+        ['Value of approved + completed', Math.round(earned * 100) / 100],
         ['Negotiated bookings', rows.filter((r) => r.source === 'negotiated').length],
       ]);
       summary['!cols'] = [{ wch: 36 }, { wch: 14 }];
@@ -56,7 +56,7 @@ export async function GET(req) {
       const rows = await sql`select o.id, o.customer, o.contact, o.items, o.total::float8 as total, o.status,
           to_char(o.created_at at time zone 'Europe/London', 'YYYY-MM-DD HH24:MI') as created
         from site_orders o join sites st on st.id = o.site_id where st.owner_id = ${s.userId} order by o.created_at desc`;
-      const head = ['Order', 'Customer', 'Contact', 'Items', 'Total (£)', 'Status', 'Ordered on'];
+      const head = ['Order', 'Customer', 'Contact', 'Items', 'Total', 'Status', 'Ordered on'];
       const data = rows.map((r) => [r.id, r.customer, r.contact, (r.items || []).map((i) => `${i.qty} x ${i.name}`).join(', '), r.total, r.status, r.created]);
       const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
       ws['!cols'] = head.map((h, i) => ({ wch: [7, 22, 26, 44, 12, 12, 18][i] }));

@@ -1,5 +1,8 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { formatMoney, withTax } from '@/lib/siteDefaults';
+import { tr } from '@/lib/i18n';
+import CookieBanner from '@/components/CookieBanner';
 
 const T = {
   classic: { bg: '#ffffff', alt: '#f6f8fb', fg: '#111827', mute: '#6b7280', card: '#ffffff', line: '#e5e7eb', font: 'system-ui, -apple-system, "Segoe UI", sans-serif', head: 'system-ui, -apple-system, "Segoe UI", sans-serif', hw: 800, radius: 16, upper: false, nav: 'rgba(255,255,255,.88)', navFg: '#111827', foot: '#0f172a', footFg: '#cbd5e1' },
@@ -9,8 +12,6 @@ const T = {
   dark: { bg: '#0b0d12', alt: '#10131a', fg: '#f3f4f6', mute: '#9ca3af', card: '#151922', line: '#252b38', font: 'system-ui, -apple-system, "Segoe UI", sans-serif', head: 'system-ui, -apple-system, "Segoe UI", sans-serif', hw: 800, radius: 16, upper: false, nav: 'rgba(11,13,18,.82)', navFg: '#f3f4f6', foot: '#07080c', footFg: '#9ca3af' },
 };
 
-const gbp = (n) => (Number(n) ? `£${Number(n)}` : 'Free');
-const money = (n) => `£${(Math.round(n * 100) / 100).toFixed(2)}`;
 
 function useCountUp(target, run) {
   const [v, setV] = useState(0);
@@ -34,6 +35,12 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
   const t = T[template] || T.classic;
   const a = data.accent || '#2563eb';
   const root = useRef(null);
+  const lang = data.language || 'en';
+  const cur = data.currency || 'GBP';
+  const L = (key, vars) => tr(lang, key, vars);
+  const money = (n) => formatMoney(Math.round((Number(n) || 0) * 100) / 100, cur, lang);
+  const gbp = (n) => (Number(n) ? money(n) : L('free'));
+  const taxRate = Number(data.taxRate) || 0;
 
   const [menu, setMenu] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -82,6 +89,15 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
     return () => scroller.removeEventListener('scroll', on);
   }, [preview]);
 
+  useEffect(() => {
+    if (preview || !slug) return;
+    try {
+      if (sessionStorage.getItem('gnis_v_' + slug)) return;
+      sessionStorage.setItem('gnis_v_' + slug, '1');
+    } catch {}
+    fetch('/api/site/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }), keepalive: true }).catch(() => {});
+  }, [slug, preview]);
+
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest' }); }, [chat]);
   useEffect(() => { const k = (e) => e.key === 'Escape' && setLightbox(null); window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, []);
 
@@ -93,7 +109,9 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
   const selected = data.services.find((s) => s.name === form.service);
   const locked = neg.lock && neg.lock.service === form.service ? neg.lock : null;
   const cartLines = useMemo(() => data.products.filter((p) => cart[p.name]).map((p) => ({ ...p, qty: cart[p.name] })), [cart, data.products]);
-  const cartTotal = cartLines.reduce((s, l) => s + (Number(l.price) || 0) * l.qty, 0);
+  const cartNet = cartLines.reduce((s, l) => s + (Number(l.price) || 0) * l.qty, 0);
+  const cartTotal = Math.round(cartLines.reduce((s, l) => s + withTax(l.price, data) * l.qty, 0) * 100) / 100;
+  const cartTax = taxRate ? (data.taxIncluded !== false ? cartTotal - cartTotal / (1 + taxRate / 100) : cartTotal - cartNet) : 0;
   const cartCount = cartLines.reduce((s, l) => s + l.qty, 0);
 
   const changeService = (name) => {
@@ -104,8 +122,8 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
   const sendOffer = async (value) => {
     const amount = Number(value ?? offer);
     if (!(amount > 0)) return;
-    if (preview) { setChat((c) => [...c, { who: 'me', text: `£${amount}` }, { who: 'ai', text: 'Preview only. Negotiation works on your live site.' }]); setOffer(''); return; }
-    setChat((c) => [...c, { who: 'me', text: `I can do £${amount}` }]);
+    if (preview) { setChat((c) => [...c, { who: 'me', text: money(amount) }, { who: 'ai', text: 'Preview only. Negotiation works on your live site.' }]); setOffer(''); return; }
+    setChat((c) => [...c, { who: 'me', text: L('offerMsg', { amt: money(amount) }) }]);
     setOffer('');
     setNeg((n) => ({ ...n, busy: true }));
     try {
@@ -128,7 +146,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       const r = await fetch('/api/site/book', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, ...form, lockToken: locked?.token }) });
       const j = await r.json();
       if (j.ok) {
-        setState({ busy: false, ok: true, msg: `Request sent at ${money(j.price)}. You will be contacted to confirm.` });
+        setState({ busy: false, ok: true, msg: L('sentOk', { amt: money(j.price) }) });
         setForm({ customer: '', contact: '', service: '', date: '', time: '' });
         setChat([]); setNeg({ state: null, busy: false, lock: null, open: false });
       } else setState({ busy: false, ok: false, msg: j.error || 'Something went wrong' });
@@ -143,7 +161,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       const r = await fetch('/api/site/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, items, ...buyer }) });
       const j = await r.json();
       if (j.ok && j.url) { window.location.href = j.url; return; }
-      if (j.ok) { setCart({}); setShop({ busy: false, ok: true, msg: 'Order placed! You pay when you collect or receive it.' }); return; }
+      if (j.ok) { setCart({}); setShop({ busy: false, ok: true, msg: L('orderOk') }); return; }
       setShop({ busy: false, ok: false, msg: j.error || 'Checkout failed' });
     } catch { setShop({ busy: false, ok: false, msg: 'Network error. Try again.' }); }
   };
@@ -151,7 +169,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
   const hasGallery = data.gallery.length > 0;
   const hasProducts = data.products.length > 0;
   const heroH = preview ? 560 : '100svh';
-  const links = [['home', 'Home'], ...(hasGallery ? [['gallery', 'Gallery']] : []), ['services', 'Services'], ...(hasProducts ? [['shop', 'Shop']] : []), ['about', 'About'], ['contact', 'Contact us']];
+  const links = [['home', L('home')], ...(hasGallery ? [['gallery', L('gallery')]] : []), ['services', L('services')], ...(hasProducts ? [['shop', L('shop')]] : []), ['about', L('about')], ['contact', L('contact')]];
   const words = [...data.services.map((s) => s.name), ...data.products.map((p) => p.name)].filter(Boolean);
   const ticker = words.length ? [...words, ...words, ...words, ...words] : [];
   const marqueeImgs = data.gallery.length >= 3 ? [...data.gallery, ...data.gallery] : data.gallery;
@@ -245,7 +263,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
     <div ref={root} className="sr-root" style={{ background: t.bg, color: t.fg, fontFamily: t.font, lineHeight: 1.6, minHeight: '100%' }}>
       <style>{css}</style>
 
-      {paidBanner && <div style={{ background: '#059669', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>Payment received. Thank you! The seller will be in touch.</div>}
+      {paidBanner && <div style={{ background: '#059669', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L('paidOk')}</div>}
 
       <nav className="sr-nav" style={{ background: t.nav, color: t.navFg, boxShadow: scrolled ? '0 4px 24px rgba(0,0,0,.12)' : 'none', borderBottom: `1px solid ${scrolled ? t.line : 'transparent'}` }}>
         <div className="sr-wrap">
@@ -254,9 +272,9 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
             <div className="sr-links">
               {links.map(([id, label]) => (<button key={id} className="sr-link" onClick={() => go(id)}>{label}</button>))}
               <button className="sr-link sr-cartbtn" onClick={() => go(hasProducts ? 'shop' : 'book')} aria-label={`Cart, ${cartCount} items`}>
-                Cart{cartCount > 0 && <span className="sr-badge">{cartCount}</span>}
+                {L('cart')}{cartCount > 0 && <span className="sr-badge">{cartCount}</span>}
               </button>
-              <button className="sr-btn" style={{ padding: '10px 20px', fontSize: 15, marginLeft: 6 }} onClick={() => go('book')}>Book now</button>
+              <button className="sr-btn" style={{ padding: '10px 20px', fontSize: 15, marginLeft: 6 }} onClick={() => go('book')}>{L('bookNow')}</button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} className="sr-mobile-actions">
               <button className="sr-burger sr-cartbtn" onClick={() => go(hasProducts ? 'shop' : 'book')} aria-label="Cart">
@@ -269,7 +287,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
           {menu && (
             <div className="sr-menu">
               {links.map(([id, label]) => (<button key={id} className="sr-link" onClick={() => go(id)}>{label}</button>))}
-              <button className="sr-btn" style={{ marginTop: 8 }} onClick={() => go('book')}>Book now</button>
+              <button className="sr-btn" style={{ marginTop: 8 }} onClick={() => go('book')}>{L('bookNow')}</button>
             </div>
           )}
         </div>
@@ -281,13 +299,13 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
           <h1>{data.businessName}</h1>
           <p>{data.tagline}</p>
           <div className="sr-hero-cta">
-            <button className="sr-btn" onClick={() => go('book')}>Book now</button>
-            <button className="sr-btn" style={{ background: 'transparent', border: '2px solid currentColor', color: 'inherit' }} onClick={() => go(hasGallery ? 'gallery' : 'services')}>{hasGallery ? 'See our work' : 'Our services'}</button>
+            <button className="sr-btn" onClick={() => go('book')}>{L('bookNow')}</button>
+            <button className="sr-btn" style={{ background: 'transparent', border: '2px solid currentColor', color: 'inherit' }} onClick={() => go(hasGallery ? 'gallery' : 'services')}>{hasGallery ? L('seeWork') : L('ourServices')}</button>
           </div>
           <div className="sr-stats">
-            {bookingCount > 0 && <div className="sr-stat"><b>{count}+</b><span>bookings made</span></div>}
-            {data.services.length > 0 && <div className="sr-stat"><b>{data.services.length}</b><span>{data.services.length === 1 ? 'service' : 'services'}</span></div>}
-            {data.location && <div className="sr-stat"><b style={{ fontSize: 'clamp(16px,2vw,20px)', paddingTop: 6 }}>{data.location}</b><span>find us</span></div>}
+            {bookingCount > 0 && <div className="sr-stat"><b>{count}+</b><span>{L('bookingsMade')}</span></div>}
+            {data.services.length > 0 && <div className="sr-stat"><b>{data.services.length}</b><span>{data.services.length === 1 ? L('service') : L('servicesPl')}</span></div>}
+            {data.location && <div className="sr-stat"><b style={{ fontSize: 'clamp(16px,2vw,20px)', paddingTop: 6 }}>{data.location}</b><span>{L('findUs')}</span></div>}
           </div>
         </div>
       </header>
@@ -299,8 +317,8 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       {hasGallery && (
         <section data-sec="gallery" className="sr-sec" style={{ background: t.bg }}>
           <div className="sr-wrap">
-            <h2 className="sr-h2 sr-reveal">Our work</h2>
-            <p className="sr-sub sr-reveal sr-d1">A look at what we do. Tap a photo to enlarge it.</p>
+            <h2 className="sr-h2 sr-reveal">{L('ourWork')}</h2>
+            <p className="sr-sub sr-reveal sr-d1">{L('ourWorkSub')}</p>
             {data.gallery.length >= 3 ? (
               <div className="sr-marq sr-reveal"><div className="sr-mtrack">{marqueeImgs.map((g, i) => (<img key={i} src={g} alt="" loading="lazy" onClick={() => setLightbox(g)} />))}</div></div>
             ) : (
@@ -313,8 +331,8 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       {data.services.length > 0 && (
         <section data-sec="services" className="sr-sec" style={{ background: hasGallery ? t.alt : t.bg }}>
           <div className="sr-wrap">
-            <h2 className="sr-h2 sr-reveal">Services</h2>
-            <p className="sr-sub sr-reveal sr-d1">Choose a service, then book a time that suits you.</p>
+            <h2 className="sr-h2 sr-reveal">{L('services')}</h2>
+            <p className="sr-sub sr-reveal sr-d1">{L('servicesSub')}</p>
             <div className="sr-grid">
               {data.services.map((s, i) => (
                 <div key={i} className={`sr-card sr-reveal sr-d${(i % 3) + 1}`}>
@@ -322,8 +340,8 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
                   {s.duration && <div style={{ color: t.mute, fontSize: 13, marginTop: 2 }}>{s.duration}</div>}
                   {s.desc && <p style={{ color: t.mute, fontSize: 15, margin: '10px 0 0' }}>{s.desc}</p>}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 16 }}>
-                    {s.negotiable ? <span style={{ fontSize: 12, color: a, fontWeight: 700 }}>Price negotiable</span> : <span />}
-                    <button className="sr-ghost" onClick={() => { changeService(s.name); go('book'); }}>Book this</button>
+                    {s.negotiable ? <span style={{ fontSize: 12, color: a, fontWeight: 700 }}>{L('priceNegotiable')}</span> : <span />}
+                    <button className="sr-ghost" onClick={() => { changeService(s.name); go('book'); }}>{L('bookThis')}</button>
                   </div>
                 </div>
               ))}
@@ -335,8 +353,8 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       {hasProducts && (
         <section data-sec="shop" className="sr-sec" style={{ background: t.bg }}>
           <div className="sr-wrap">
-            <h2 className="sr-h2 sr-reveal">Shop</h2>
-            <p className="sr-sub sr-reveal sr-d1">Add items to your cart and check out in a minute.</p>
+            <h2 className="sr-h2 sr-reveal">{L('shop')}</h2>
+            <p className="sr-sub sr-reveal sr-d1">{L('shopSub')}</p>
             <div className="sr-grid">
               {data.products.map((p, i) => (
                 <div key={i} className={`sr-card sr-prod sr-reveal sr-d${(i % 3) + 1}`}>
@@ -351,7 +369,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
                         <button className="sr-ghost" onClick={() => setCart((c) => ({ ...c, [p.name]: Math.min(20, (c[p.name] || 0) + 1) }))}>+</button>
                       </div>
                     ) : (
-                      <button className="sr-btn" style={{ padding: '10px 18px', fontSize: 14 }} onClick={() => setCart((c) => ({ ...c, [p.name]: 1 }))}>Add to cart</button>
+                      <button className="sr-btn" style={{ padding: '10px 18px', fontSize: 14 }} onClick={() => setCart((c) => ({ ...c, [p.name]: 1 }))}>{L('addToCart')}</button>
                     )}
                   </div>
                 </div>
@@ -359,14 +377,15 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
             </div>
 
             <div className="sr-card sr-reveal" style={{ marginTop: 32, maxWidth: 560 }}>
-              <strong style={{ fontSize: 18 }}>Your cart {cartCount > 0 && `(${cartCount})`}</strong>
-              {cartCount === 0 ? <p style={{ color: t.mute, margin: '8px 0 0' }}>Your cart is empty. Add something above.</p> : (<>
+              <strong style={{ fontSize: 18 }}>{L('yourCart')} {cartCount > 0 && `(${cartCount})`}</strong>
+              {cartCount === 0 ? <p style={{ color: t.mute, margin: '8px 0 0' }}>{L('cartEmpty')}</p> : (<>
                 {cartLines.map((l) => (<div key={l.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, marginTop: 8 }}><span>{l.qty} × {l.name}</span><span>{money(l.price * l.qty)}</span></div>))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, margin: '14px 0', borderTop: `1px solid ${t.line}`, paddingTop: 12 }}><span>Total</span><span>{money(cartTotal)}</span></div>
+                {taxRate > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: t.mute, marginTop: 10 }}><span>{data.taxIncluded !== false ? L('inclTax', { rate: taxRate }) : `${L('tax')} (${taxRate}%)`}</span><span>{money(cartTax)}</span></div>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, margin: '14px 0', borderTop: `1px solid ${t.line}`, paddingTop: 12 }}><span>{L('total')}</span><span>{money(cartTotal)}</span></div>
                 <div style={{ display: 'grid', gap: 10 }}>
-                  <input className={input} placeholder="Your name" value={buyer.customer} onChange={(e) => setBuyer({ ...buyer, customer: e.target.value })} />
-                  <input className={input} placeholder="Phone or email" value={buyer.contact} onChange={(e) => setBuyer({ ...buyer, contact: e.target.value })} />
-                  <button className="sr-btn" disabled={shop.busy} onClick={checkout}>{shop.busy ? 'Please wait…' : payOnline ? `Pay ${money(cartTotal)} by card` : 'Place order (pay in person)'}</button>
+                  <input className={input} placeholder={L('yourName')} value={buyer.customer} onChange={(e) => setBuyer({ ...buyer, customer: e.target.value })} />
+                  <input className={input} placeholder={L('phoneOrEmail')} value={buyer.contact} onChange={(e) => setBuyer({ ...buyer, contact: e.target.value })} />
+                  <button className="sr-btn" disabled={shop.busy} onClick={checkout}>{shop.busy ? L('pleaseWait') : payOnline ? L('payByCard', { amt: money(cartTotal) }) : L('placeOrder')}</button>
                 </div>
               </>)}
               {shop.msg && <div style={{ marginTop: 10, fontSize: 14, color: shop.ok ? '#059669' : '#dc2626' }}>{shop.msg}</div>}
@@ -378,13 +397,13 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       <section data-sec="about" className="sr-sec" style={{ background: t.alt }}>
         <div className="sr-wrap sr-split">
           <div>
-            <h2 className="sr-h2 sr-reveal">About us</h2>
+            <h2 className="sr-h2 sr-reveal">{L('aboutUs')}</h2>
             <p className="sr-reveal sr-d1" style={{ color: t.mute, whiteSpace: 'pre-wrap', fontSize: 17, maxWidth: 560 }}>{data.about}</p>
           </div>
           <div className="sr-card sr-reveal sr-d2">
-            <strong style={{ fontSize: 18 }}>Opening hours</strong>
-            <p style={{ color: t.mute, margin: '8px 0 0' }}>{data.hours || 'Contact us for hours'}</p>
-            {data.location && (<><strong style={{ fontSize: 18, display: 'block', marginTop: 20 }}>Find us</strong><p style={{ color: t.mute, margin: '8px 0 0' }}>{data.location}</p></>)}
+            <strong style={{ fontSize: 18 }}>{L('openingHours')}</strong>
+            <p style={{ color: t.mute, margin: '8px 0 0' }}>{data.hours || L('contactHours')}</p>
+            {data.location && (<><strong style={{ fontSize: 18, display: 'block', marginTop: 20 }}>{L('findUs')}</strong><p style={{ color: t.mute, margin: '8px 0 0' }}>{data.location}</p></>)}
           </div>
         </div>
       </section>
@@ -392,26 +411,26 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       <section data-sec="book" className="sr-sec" style={{ background: t.bg }}>
         <div className="sr-wrap sr-split">
           <div>
-            <h2 className="sr-h2 sr-reveal">Book an appointment</h2>
-            <p className="sr-sub sr-reveal sr-d1">Pick a service, choose a date and time, and we will confirm your booking.</p>
-            {bookingCount > 0 && <p className="sr-reveal sr-d2" style={{ color: a, fontWeight: 700 }}>{bookingCount}+ bookings made so far</p>}
+            <h2 className="sr-h2 sr-reveal">{L('bookAppointment')}</h2>
+            <p className="sr-sub sr-reveal sr-d1">{L('bookSub')}</p>
+            {bookingCount > 0 && <p className="sr-reveal sr-d2" style={{ color: a, fontWeight: 700 }}>{L('bookingsSoFar', { n: bookingCount })}</p>}
           </div>
           <form onSubmit={submit} className="sr-card sr-reveal sr-d1" style={{ display: 'grid', gap: 12 }}>
-            <input className={input} placeholder="Your name" required value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} />
-            <input className={input} placeholder="Phone or email" required value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
+            <input className={input} placeholder={L('yourName')} required value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} />
+            <input className={input} placeholder={L('phoneOrEmail')} required value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
             <select className={input} required value={form.service} onChange={(e) => changeService(e.target.value)}>
-              <option value="">Choose a service</option>
+              <option value="">{L('chooseService')}</option>
               {data.services.map((s, i) => (<option key={i} value={s.name}>{s.name} ({gbp(s.price)})</option>))}
             </select>
 
             {selected?.negotiable && (
               <div style={{ border: `1px dashed ${a}`, borderRadius: Math.max(t.radius - 4, 6), padding: 14 }}>
                 {locked ? (
-                  <div style={{ fontWeight: 700, color: '#059669' }}>Price locked: {money(locked.price)} <span style={{ color: t.mute, fontWeight: 400 }}>(listed {money(selected.price)})</span></div>
+                  <div style={{ fontWeight: 700, color: '#059669' }}>{L('priceLocked', { amt: money(locked.price) })} <span style={{ color: t.mute, fontWeight: 400 }}>({L('listed', { amt: money(selected.price) })})</span></div>
                 ) : !neg.open ? (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 14 }}>This price is negotiable. Want to haggle?</span>
-                    <button type="button" className="sr-ghost" onClick={() => { setNeg((n) => ({ ...n, open: true })); setChat([{ who: 'ai', text: `Hi! ${selected.name} is listed at ${money(selected.price)}. What price did you have in mind?` }]); }}>Negotiate price</button>
+                    <span style={{ fontSize: 14 }}>{L('negotiableQ')}</span>
+                    <button type="button" className="sr-ghost" onClick={() => { setNeg((n) => ({ ...n, open: true })); setChat([{ who: 'ai', text: L('negHi', { service: selected.name, price: money(selected.price) }) }]); }}>{L('negotiate')}</button>
                   </div>
                 ) : (
                   <div>
@@ -419,15 +438,15 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
                       {chat.map((m, i) => (
                         <div key={i} style={{ justifySelf: m.who === 'me' ? 'end' : 'start', maxWidth: '88%' }}>
                           <div style={{ background: m.who === 'me' ? a : t.alt, color: m.who === 'me' ? '#fff' : t.fg, borderRadius: 14, padding: '9px 13px', fontSize: 14 }}>{m.text}</div>
-                          {m.counter != null && i === chat.length - 1 && !neg.busy && <button type="button" className="sr-ghost" style={{ marginTop: 6, padding: '6px 12px' }} onClick={() => sendOffer(m.counter)}>Accept {money(m.counter)}</button>}
+                          {m.counter != null && i === chat.length - 1 && !neg.busy && <button type="button" className="sr-ghost" style={{ marginTop: 6, padding: '6px 12px' }} onClick={() => sendOffer(m.counter)}>{L('accept', { amt: money(m.counter) })}</button>}
                         </div>
                       ))}
-                      {neg.busy && <div style={{ fontSize: 13, color: t.mute }}>Typing…</div>}
+                      {neg.busy && <div style={{ fontSize: 13, color: t.mute }}>{L('typing')}</div>}
                       <div ref={chatEnd} />
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <input className={input} type="number" min="1" step="0.01" placeholder="Your offer £" value={offer} onChange={(e) => setOffer(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); sendOffer(); } }} />
-                      <button type="button" className="sr-btn" style={{ padding: '10px 18px' }} disabled={neg.busy} onClick={() => sendOffer()}>Offer</button>
+                      <input className={input} type="number" min="1" step="0.01" placeholder={L('yourOffer')} value={offer} onChange={(e) => setOffer(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); sendOffer(); } }} />
+                      <button type="button" className="sr-btn" style={{ padding: '10px 18px' }} disabled={neg.busy} onClick={() => sendOffer()}>{L('offer')}</button>
                     </div>
                   </div>
                 )}
@@ -438,7 +457,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
               <input className={input} type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
               <input className={input} type="time" required value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
             </div>
-            <button className="sr-btn" disabled={state.busy}>{state.busy ? 'Sending…' : locked ? `Request booking at ${money(locked.price)}` : 'Request booking'}</button>
+            <button className="sr-btn" disabled={state.busy}>{state.busy ? L('sending') : locked ? L('requestBookingAt', { amt: money(locked.price) }) : L('requestBooking')}</button>
             {state.msg && <div style={{ fontSize: 14, color: state.ok ? '#059669' : '#dc2626' }}>{state.msg}</div>}
           </form>
         </div>
@@ -452,28 +471,31 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
               <p style={{ margin: 0, maxWidth: 320, fontSize: 15 }}>{data.tagline}</p>
             </div>
             <div>
-              <div style={{ color: '#fff', fontWeight: 700, marginBottom: 12 }}>Quick links</div>
+              <div style={{ color: '#fff', fontWeight: 700, marginBottom: 12 }}>{L('quickLinks')}</div>
               {links.map(([id, label]) => (<button key={id} onClick={() => go(id)}>{label}</button>))}
-              <button onClick={() => go('book')}>Book now</button>
+              <button onClick={() => go('book')}>{L('bookNow')}</button>
             </div>
             <div>
-              <div style={{ color: '#fff', fontWeight: 700, marginBottom: 12 }}>Opening hours</div>
-              <p style={{ margin: 0, fontSize: 15 }}>{data.hours || 'Contact us for hours'}</p>
-              {bookingCount > 0 && <p style={{ margin: '12px 0 0', fontSize: 14 }}>{bookingCount}+ bookings made</p>}
+              <div style={{ color: '#fff', fontWeight: 700, marginBottom: 12 }}>{L('openingHours')}</div>
+              <p style={{ margin: 0, fontSize: 15 }}>{data.hours || L('contactHours')}</p>
+              {bookingCount > 0 && <p style={{ margin: '12px 0 0', fontSize: 14 }}>{bookingCount}+ {L('bookingsMade')}</p>}
+              {data.vatNumber && <p style={{ margin: '12px 0 0', fontSize: 13 }}>{L('vatNo')} {data.vatNumber}</p>}
             </div>
             <div>
-              <div style={{ color: '#fff', fontWeight: 700, marginBottom: 12 }}>Contact us</div>
+              <div style={{ color: '#fff', fontWeight: 700, marginBottom: 12 }}>{L('contact')}</div>
               {data.phone && <a href={`tel:${data.phone.replace(/\s/g, '')}`}>📞 {data.phone}</a>}
               {data.email && <a href={`mailto:${data.email}`}>✉️ {data.email}</a>}
               {data.location && <a href={`https://www.google.com/maps/search/${encodeURIComponent(data.location)}`} target="_blank" rel="noreferrer">📍 {data.location}</a>}
             </div>
           </div>
           <div style={{ borderTop: '1px solid rgba(255,255,255,.12)', marginTop: 36, paddingTop: 20, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
-            <span>© {new Date().getFullYear()} {data.businessName}. All rights reserved.</span>
-            <span><a href={`/clock/${slug}`} style={{ color: 'inherit', display: 'inline', margin: 0 }}>Staff login</a></span>
+            <span>© {new Date().getFullYear()} {data.businessName}. {L('rights')}</span>
+            <span style={{ display: 'flex', gap: 14 }}><a href="/privacy" style={{ color: 'inherit', display: 'inline', margin: 0 }}>{L('privacy')}</a><a href="/terms" style={{ color: 'inherit', display: 'inline', margin: 0 }}>{L('terms')}</a><a href={`/clock/${slug}`} style={{ color: 'inherit', display: 'inline', margin: 0 }}>{L('staffLogin')}</a></span>
           </div>
         </div>
       </footer>
+
+      {!preview && <CookieBanner lang={lang} accent={a} />}
 
       {lightbox && (<div className="sr-lb" onClick={() => setLightbox(null)}><img src={lightbox} alt="" /></div>)}
     </div>

@@ -2,20 +2,48 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { logout } from '@/app/auth/action';
 import SiteRenderer from '@/components/SiteRenderer';
-import { TEMPLATE_LIST, ACCENTS, DEFAULT_DATA, BOOKING_STATUSES, ORDER_STATUSES, mergeData } from '@/lib/siteDefaults';
+import { TEMPLATE_LIST, ACCENTS, DEFAULT_DATA, BOOKING_STATUSES, ORDER_STATUSES, CURRENCIES, STRIPE_CURRENCIES, LANGUAGES, mergeData, formatMoney } from '@/lib/siteDefaults';
+import { PROFESSIONS } from '@/lib/professions';
 
 const TABS = [
   { id: 'design', l: 'Design' },
   { id: 'services', l: 'Services' },
   { id: 'products', l: 'Products' },
   { id: 'gallery', l: 'Gallery' },
+  { id: 'analytics', l: 'Analytics' },
   { id: 'bookings', l: 'Bookings' },
   { id: 'orders', l: 'Orders' },
   { id: 'staff', l: 'Staff' },
+  { id: 'growth', l: 'Growth' },
   { id: 'payments', l: 'Payments' },
 ];
 
-const STATUS_COLOR = { pending: '#d97706', approved: '#2563eb', completed: '#059669', paid: '#059669', fulfilled: '#2563eb', cancelled: '#dc2626' };
+const STATUS_COLOR = { pending: '#d97706', approved: '#2563eb', completed: '#059669', paid: '#059669', fulfilled: '#2563eb', cancelled: '#dc2626', no_show: '#7f1d1d' };
+const RISK_COLOR = { low: '#059669', medium: '#d97706', high: '#dc2626' };
+
+function Bars({ items, color = '#2563eb', fmt = (v) => v }) {
+  const max = Math.max(1, ...items.map((i) => i.n));
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 110 }}>
+      {items.map((i) => (
+        <div key={i.label} title={`${i.label}: ${fmt(i.n)}`} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+          <div style={{ width: '100%', background: color, borderRadius: '3px 3px 0 0', height: `${Math.max(2, (i.n / max) * 90)}%`, opacity: i.n ? 1 : 0.2 }} />
+          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden' }}>{i.label.length > 5 ? i.label.slice(0, 2) : i.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Line({ points, color = '#059669' }) {
+  const w = 600, h = 120, max = Math.max(1, ...points.map((p) => p.v));
+  const pts = points.map((p, i) => `${(i / Math.max(1, points.length - 1)) * w},${h - (p.v / max) * (h - 8) - 4}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height="120" preserveAspectRatio="none" role="img" aria-label="Revenue over 30 days">
+      <polyline fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" points={pts} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
 
 function compress(file, max = 900, q = 0.7) {
   return new Promise((resolve, reject) => {
@@ -62,6 +90,9 @@ export default function Dashboard() {
   const [orders, setOrders] = useState([]);
   const [staff, setStaff] = useState({ staff: [], shifts: [] });
   const [newStaff, setNewStaff] = useState('');
+  const [analytics, setAnalytics] = useState(null);
+  const [growth, setGrowth] = useState(null);
+  const [qr, setQr] = useState('');
   const [stripe, setStripe] = useState({ connected: false, ready: false, configured: true });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,6 +102,8 @@ export default function Dashboard() {
   const target = useRef(null);
 
   const loadStaff = async () => { const j = await getJson('/api/site/staff'); if (j.ok) setStaff({ staff: j.staff, shifts: j.shifts }); };
+  const loadAnalytics = async () => { const j = await getJson('/api/site/analytics'); if (j.ok) setAnalytics(j.data || null); };
+  const loadGrowth = async () => { const j = await getJson('/api/site/growth'); if (j.ok) setGrowth(j.data || null); };
   const loadStripe = async () => { const j = await getJson('/api/site/stripe'); if (j.ok) setStripe({ connected: j.connected, ready: j.ready, configured: j.configured }); };
 
   useEffect(() => {
@@ -83,13 +116,16 @@ export default function Dashboard() {
         const [b, o] = await Promise.all([getJson('/api/site/bookings'), getJson('/api/site/orders')]);
         if (b.ok) setBookings(b.data || []);
         if (o.ok) setOrders(o.data || []);
-        if (j.data) { loadStaff(); loadStripe(); }
+        if (j.data) { loadStaff(); loadStripe(); loadAnalytics(); loadGrowth(); }
         if (new URLSearchParams(window.location.search).get('stripe') === 'done') setTab('payments');
       } catch {}
       setLoading(false);
     })();
   }, []);
 
+  const cur = data.currency || 'GBP';
+  const sym = (formatMoney(0, cur, data.language || 'en').replace(/[0-9.,\s]/g, '')) || cur;
+  const fm = (n) => formatMoney(Math.round((Number(n) || 0) * 100) / 100, cur, data.language || 'en');
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }));
   const setItem = (k, i, patch) => setData((d) => ({ ...d, [k]: d[k].map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
   const addItem = (k, item) => setData((d) => ({ ...d, [k]: [...d[k], item] }));
@@ -154,6 +190,13 @@ export default function Dashboard() {
   };
   const newCode = async (id) => { await sendJson('/api/site/staff', 'PATCH', { id }); loadStaff(); };
   const removeStaff = async (id) => { if (confirm('Remove this staff member?')) { await sendJson('/api/site/staff', 'DELETE', { id }); loadStaff(); } };
+
+  const makeQr = async () => {
+    try {
+      const QR = (await import('qrcode')).default;
+      setQr(await QR.toDataURL(liveUrl, { width: 600, margin: 2 }));
+    } catch { setMsg('Could not make the QR code'); }
+  };
 
   const connectStripe = async () => {
     const j = await sendJson('/api/site/stripe', 'POST', {});
@@ -247,6 +290,21 @@ export default function Dashboard() {
               <button style={btn('#374151')} onClick={() => pick('hero')}>{data.hero ? 'Change image' : 'Upload image'}</button>
               {data.hero && <button style={{ ...btn('#dc2626'), marginLeft: 8 }} onClick={() => set('hero', '')}>Remove</button>}
             </div>
+            <div style={box}>
+              <strong>Region and tax</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>Currency and language change what your customers see. Card payments work in {STRIPE_CURRENCIES.join(', ')}; other currencies are pay in person.</p>
+              <span style={lbl}>Currency</span>
+              <select style={inp} value={cur} onChange={(e) => set('currency', e.target.value)}>{CURRENCIES.map((c) => (<option key={c} value={c}>{c}</option>))}</select>
+              <span style={lbl}>Language of your site</span>
+              <select style={inp} value={data.language || 'en'} onChange={(e) => set('language', e.target.value)}>{LANGUAGES.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}</select>
+              <span style={lbl}>Tax rate % (VAT, sales tax). Use 0 if you do not charge tax</span>
+              <input style={inp} type="number" min="0" max="30" step="0.1" value={data.taxRate ?? 0} onChange={(e) => set('taxRate', e.target.value)} />
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, marginBottom: 8 }}>
+                <input type="checkbox" checked={data.taxIncluded !== false} onChange={(e) => set('taxIncluded', e.target.checked)} /> My listed prices already include tax
+              </label>
+              <span style={lbl}>VAT / tax number (shown in your footer, optional)</span>
+              <input style={inp} value={data.vatNumber || ''} onChange={(e) => set('vatNumber', e.target.value)} />
+            </div>
           </>)}
 
           {tab === 'services' && (<>
@@ -254,7 +312,7 @@ export default function Dashboard() {
               <div key={i} style={box}>
                 <input style={inp} placeholder="Service name" value={s.name} onChange={(e) => setItem('services', i, { name: e.target.value })} />
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input style={inp} type="number" min="0" placeholder="Price £" value={s.price} onChange={(e) => setItem('services', i, { price: e.target.value })} />
+                  <input style={inp} type="number" min="0" placeholder={`Price (${sym})`} value={s.price} onChange={(e) => setItem('services', i, { price: e.target.value })} />
                   <input style={inp} placeholder="Duration" value={s.duration} onChange={(e) => setItem('services', i, { duration: e.target.value })} />
                 </div>
                 <input style={inp} placeholder="Short description" value={s.desc} onChange={(e) => setItem('services', i, { desc: e.target.value })} />
@@ -264,9 +322,9 @@ export default function Dashboard() {
                 </label>
                 {s.negotiable && (
                   <div>
-                    <span style={lbl}>Lowest price you would accept (£), kept private</span>
+                    <span style={lbl}>Lowest price you would accept, kept private</span>
                     <input style={inp} type="number" min="0" value={s.minPrice || ''} onChange={(e) => setItem('services', i, { minPrice: e.target.value })} />
-                    {!(Number(s.minPrice) > 0 && Number(s.minPrice) < Number(s.price)) && <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 8 }}>The lowest price must be above £0 and below the listed price, otherwise negotiation stays off.</div>}
+                    {!(Number(s.minPrice) > 0 && Number(s.minPrice) < Number(s.price)) && <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 8 }}>The lowest price must be above 0 and below the listed price, otherwise negotiation stays off.</div>}
                   </div>
                 )}
                 <button style={btn('#dc2626')} onClick={() => delItem('services', i)}>Delete</button>
@@ -280,7 +338,7 @@ export default function Dashboard() {
             {data.products.map((p, i) => (
               <div key={i} style={box}>
                 <input style={inp} placeholder="Product name" value={p.name} onChange={(e) => setItem('products', i, { name: e.target.value })} />
-                <input style={inp} type="number" min="0" placeholder="Price £" value={p.price} onChange={(e) => setItem('products', i, { price: e.target.value })} />
+                <input style={inp} type="number" min="0" placeholder={`Price (${sym})`} value={p.price} onChange={(e) => setItem('products', i, { price: e.target.value })} />
                 <input style={inp} placeholder="Short description" value={p.desc} onChange={(e) => setItem('products', i, { desc: e.target.value })} />
                 {p.image && <img src={p.image} alt="" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 8 }} />}
                 <button style={btn('#374151')} onClick={() => pick('product', i)}>{p.image ? 'Change photo' : 'Add photo'}</button>
@@ -304,6 +362,40 @@ export default function Dashboard() {
             <p style={{ fontSize: 12, color: '#6b7280' }}>Photos are compressed automatically.</p>
           </div>)}
 
+          {tab === 'analytics' && (!slug ? needSave : !analytics ? <div style={box}>Loading analytics…</div> : <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
+              {[
+                ['Revenue (30 days)', fm(analytics.revenue30)],
+                ['Visitors (30 days)', analytics.visitors30],
+                ['Bookings (30 days)', analytics.bookings30],
+                ['Conversion', analytics.conversion == null ? 'n/a' : `${analytics.conversion}%`],
+                ['Repeat customers', analytics.repeatRate == null ? 'n/a' : `${analytics.repeatRate}% (${analytics.repeaters}/${analytics.customers})`],
+                ['No-show rate', analytics.noShowRate == null ? 'n/a' : `${analytics.noShowRate}%`],
+              ].map(([k, v]) => (<div key={k} style={{ ...box, marginBottom: 0 }}><div style={{ fontSize: 12, color: '#6b7280' }}>{k}</div><div style={{ fontSize: 22, fontWeight: 700 }}>{v}</div></div>))}
+            </div>
+            <div style={box}><strong>Revenue, last 30 days</strong><Line points={analytics.daily.map((d) => ({ v: d.revenue }))} /></div>
+            <div style={box}><strong>Busiest days</strong><Bars items={analytics.byDow} /></div>
+            <div style={box}><strong>Busiest times</strong><Bars items={analytics.byHour} color="#7c3aed" /></div>
+            <div style={box}>
+              <strong>Price suggestions from demand</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>Compares bookings for each service over 30 days with your average. These are suggestions, never changed automatically.</p>
+              {analytics.suggestions.length === 0 && <div style={{ fontSize: 14 }}>Add services to see suggestions.</div>}
+              {analytics.suggestions.map((x) => (
+                <div key={x.name} style={{ borderTop: '1px solid #e5e7eb', padding: '10px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontWeight: 600 }}>
+                    <span>{x.name}</span>
+                    <span style={{ color: x.action === 'raise' ? '#059669' : x.action === 'promote' ? '#d97706' : '#6b7280' }}>{x.action === 'raise' ? `Raise to ${fm(x.suggested)}` : x.action === 'promote' ? `Promote or ${fm(x.suggested)}` : 'Keep price'}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>{x.bookings30} bookings in 30 days · {x.reason}</div>
+                </div>
+              ))}
+            </div>
+            <div style={box}>
+              <strong>AI negotiation</strong>
+              <div style={{ fontSize: 14, marginTop: 6 }}>{analytics.negotiated} negotiated bookings ({analytics.negotiatedShare}% of all). Average discount given: {analytics.avgDiscount}%.</div>
+            </div>
+          </>)}
+
           {tab === 'bookings' && (<>
             <div style={{ ...box, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <span style={{ fontSize: 14 }}>{bookings.length} bookings · {new Set(bookings.map((b) => String(b.contact).toLowerCase())).size} customers</span>
@@ -314,14 +406,16 @@ export default function Dashboard() {
               <div key={b.id} style={box}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
                   <span>{b.customer}</span>
-                  <span>£{Number(b.price) || 0}{b.source === 'negotiated' && b.list_price && Number(b.list_price) !== Number(b.price) ? <span style={{ color: '#6b7280', fontWeight: 400, textDecoration: 'line-through', marginLeft: 6 }}>£{Number(b.list_price)}</span> : null}</span>
+                  <span>{fm(b.price)}{b.source === 'negotiated' && b.list_price && Number(b.list_price) !== Number(b.price) ? <span style={{ color: '#6b7280', fontWeight: 400, textDecoration: 'line-through', marginLeft: 6 }}>{fm(b.list_price)}</span> : null}</span>
                 </div>
                 <div style={{ fontSize: 14, color: '#374151' }}>{b.service} · {b.date} {b.time}</div>
                 <div style={{ fontSize: 13, color: '#6b7280' }}>{b.contact}</div>
+                {b.risk && b.risk.reasons.length > 0 && <div style={{ fontSize: 12, color: '#6b7280' }}>Why: {b.risk.reasons.join(', ')}</div>}
                 <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Booked {b.created} · {b.source === 'negotiated' ? 'negotiated price' : 'website'}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={pill(b.status)}>{b.status}</span>
-                  {BOOKING_STATUSES.filter((s) => s !== b.status).map((s) => (<button key={s} style={sm(STATUS_COLOR[s])} onClick={() => setBookingStatus(b.id, s)}>{s}</button>))}
+                  <span style={pill(b.status)}>{String(b.status).replace('_', ' ')}</span>
+                  {b.risk && <span title={b.risk.reasons.join(', ')} style={{ fontSize: 11, fontWeight: 700, color: RISK_COLOR[b.risk.label], border: `1px solid ${RISK_COLOR[b.risk.label]}`, padding: '1px 8px', borderRadius: 999 }}>No-show risk: {b.risk.label} ({Math.round(b.risk.p * 100)}%)</span>}
+                  {BOOKING_STATUSES.filter((s) => s !== b.status).map((s) => (<button key={s} style={sm(STATUS_COLOR[s])} onClick={() => setBookingStatus(b.id, s)}>{s.replace('_', ' ')}</button>))}
                 </div>
               </div>
             ))}
@@ -335,7 +429,7 @@ export default function Dashboard() {
             {orders.length === 0 && <div style={box}>No orders yet.</div>}
             {orders.map((o) => (
               <div key={o.id} style={box}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}><span>#{o.id} · {o.customer}</span><span>£{Number(o.total).toFixed(2)}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}><span>#{o.id} · {o.customer}</span><span>{fm(o.total)}</span></div>
                 <div style={{ fontSize: 14, color: '#374151' }}>{(o.items || []).map((i) => `${i.qty} × ${i.name}`).join(', ')}</div>
                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>{o.contact} · {o.created}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -379,6 +473,37 @@ export default function Dashboard() {
                 {staff.shifts.map((h) => (<div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', borderTop: '1px solid #f3f4f6' }}><span>{h.name} · {h.clock_in}{h.clock_out ? ` → ${h.clock_out.slice(11)}` : ' → now'}</span><span>{Number(h.hours).toFixed(2)} h</span></div>))}
               </div>
             )}
+          </>)}
+
+          {tab === 'growth' && (!slug ? needSave : <>
+            <div style={box}>
+              <strong>Your referral link</strong>
+              <p style={{ fontSize: 14, color: '#374151' }}>Share this with other professionals. When they sign up through it, it is counted here.</p>
+              {growth ? (<>
+                <code style={{ fontSize: 13, wordBreak: 'break-all', display: 'block', marginBottom: 8 }}>{typeof window !== 'undefined' ? `${window.location.origin}/r/${growth.refCode}` : ''}</code>
+                <button style={sm('#374151')} onClick={() => copy(`${window.location.origin}/r/${growth.refCode}`)}>{copied ? 'Copied ✓' : 'Copy link'}</button>
+                <a style={{ ...sm('#25d366'), textDecoration: 'none', marginLeft: 8 }} target="_blank" rel="noreferrer" href={`https://wa.me/?text=${encodeURIComponent(`Build a booking website in minutes: ${window.location.origin}/r/${growth.refCode}`)}`}>WhatsApp</a>
+                <div style={{ display: 'flex', gap: 24, marginTop: 14 }}>
+                  <div><div style={{ fontSize: 24, fontWeight: 700 }}>{growth.signups}</div><div style={{ fontSize: 12, color: '#6b7280' }}>sign-ups</div></div>
+                  <div><div style={{ fontSize: 24, fontWeight: 700 }}>{growth.published}</div><div style={{ fontSize: 12, color: '#6b7280' }}>published sites</div></div>
+                </div>
+              </>) : <div style={{ fontSize: 14 }}>Loading…</div>}
+            </div>
+            <div style={box}>
+              <strong>QR code for your site</strong>
+              <p style={{ fontSize: 14, color: '#374151' }}>Print it on a business card, window or flyer. Customers scan it and land on your booking page.</p>
+              {qr ? (<>
+                <img src={qr} alt="QR code for your site" style={{ width: 200, height: 200, display: 'block', marginBottom: 8, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8 }} />
+                <a style={{ ...btn('#059669'), textDecoration: 'none', display: 'inline-block' }} href={qr} download={`${slug}-qr.png`}>Download PNG</a>
+              </>) : <button style={btn('#2563eb')} onClick={makeQr}>Generate QR code</button>}
+            </div>
+            <div style={box}>
+              <strong>Your profession page</strong>
+              <p style={{ fontSize: 14, color: '#374151' }}>Public pages that rank on Google for each trade. Share the one that matches your work.</p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {PROFESSIONS.map((p) => (<a key={p.slug} href={`/for/${p.slug}`} target="_blank" rel="noreferrer" style={{ ...sm('#374151'), textDecoration: 'none' }}>{p.name}</a>))}
+              </div>
+            </div>
           </>)}
 
           {tab === 'payments' && (!slug ? needSave : <div style={box}>

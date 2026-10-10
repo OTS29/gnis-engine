@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { sql } from '@/lib/db';
 import { hit, clientIp } from '@/lib/rateLimit';
+import { notifyNewBooking } from '@/lib/notify';
 
 export const runtime = 'nodejs';
 
@@ -48,8 +49,15 @@ export async function POST(req) {
       }
     }
 
-    await sql`insert into site_bookings (site_id, customer, contact, service, price, list_price, source, date, time, status)
-              values (${site.id}, ${customer}, ${contact}, ${match.name}, ${price}, ${listPrice}, ${source}, ${date}, ${time}, 'pending')`;
+    const [row] = await sql`insert into site_bookings (site_id, customer, contact, service, price, list_price, source, date, time, status)
+              values (${site.id}, ${customer}, ${contact}, ${match.name}, ${price}, ${listPrice}, ${source}, ${date}, ${time}, 'pending')
+              returning id`;
+
+    after(async () => {
+      try { await notifyNewBooking({ data: site.data }, { id: row.id, customer, contact, service: match.name, price, date, time }); }
+      catch (e) { console.error('NOTIFY_NEW_FAULT:', e); }
+    });
+
     return NextResponse.json({ ok: true, price }, { status: 201 });
   } catch (e) {
     console.error('SITE_BOOK_FAULT:', e);

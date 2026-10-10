@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { hit, clientIp } from '@/lib/rateLimit';
 import { getStripe, baseUrl } from '@/lib/stripe';
+import { withTax, STRIPE_CURRENCIES } from '@/lib/siteDefaults';
 
 export const runtime = 'nodejs';
 
@@ -24,7 +25,7 @@ export async function POST(req) {
     for (const it of Array.isArray(b.items) ? b.items.slice(0, 30) : []) {
       const p = products.find((x) => x.name === it.name);
       const qty = Math.min(20, Math.max(1, parseInt(it.qty, 10) || 1));
-      if (p) lines.push({ name: p.name, price: Number(p.price) || 0, qty });
+      if (p) lines.push({ name: p.name, price: withTax(p.price, site.data), qty });
     }
     if (!lines.length) return NextResponse.json({ ok: false, error: 'Your cart is empty' }, { status: 400 });
     const total = Math.round(lines.reduce((t, l) => t + l.price * l.qty, 0) * 100) / 100;
@@ -33,12 +34,13 @@ export async function POST(req) {
       values (${site.id}, ${customer}, ${contact}, ${JSON.stringify(lines)}::jsonb, ${total}, 'pending') returning id`;
 
     const stripe = getStripe();
-    if (stripe && site.stripe_ready && site.stripe_account_id && total >= 0.5) {
+    const cur = String(site.data?.currency || 'GBP').toUpperCase();
+    if (stripe && site.stripe_ready && site.stripe_account_id && total >= 0.5 && STRIPE_CURRENCIES.includes(cur)) {
       const pct = Math.min(20, Math.max(0, Number(process.env.PLATFORM_FEE_PERCENT ?? 3)));
       const base = baseUrl(req);
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
-        line_items: lines.map((l) => ({ quantity: l.qty, price_data: { currency: 'gbp', unit_amount: Math.round(l.price * 100), product_data: { name: l.name } } })),
+        line_items: lines.map((l) => ({ quantity: l.qty, price_data: { currency: cur.toLowerCase(), unit_amount: Math.round(l.price * 100), product_data: { name: l.name } } })),
         payment_intent_data: {
           application_fee_amount: Math.round(total * 100 * pct / 100),
           transfer_data: { destination: site.stripe_account_id },

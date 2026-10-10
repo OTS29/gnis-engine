@@ -54,6 +54,19 @@ export async function PUT(req) {
 
     await sql`insert into sites (owner_id, slug, template, data)
               values (${session.userId}, ${slug}, ${template}, ${json}::jsonb)`;
+
+    // Credit whoever referred this seller (cookie set by /r/CODE). Never blocks saving.
+    try {
+      const ref = (req.headers.get('cookie') || '').split(';').map((c) => c.trim()).find((c) => c.startsWith('gnis_ref='));
+      const code = ref ? ref.split('=')[1] : '';
+      if (/^[a-z0-9]{4,16}$/.test(code)) {
+        const [r] = await sql`select owner_id from sites where ref_code = ${code}`;
+        if (r && String(r.owner_id) !== String(session.userId)) {
+          await sql`insert into referrals (referrer_user_id, referee_user_id) values (${String(r.owner_id)}, ${String(session.userId)})
+                    on conflict (referee_user_id) do nothing`;
+        }
+      }
+    } catch (e) { console.error('REFERRAL_FAULT:', e); }
     return NextResponse.json({ ok: true, slug }, { status: 201 });
   } catch (e) {
     console.error('SITE_SAVE_FAULT:', e);
