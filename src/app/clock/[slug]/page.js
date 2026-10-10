@@ -28,7 +28,8 @@ export default function Clock() {
   const btn = (bg) => ({ background: bg, color: '#fff', border: 0, padding: '14px 18px', borderRadius: 10, fontSize: 17, fontWeight: 600, cursor: 'pointer', width: '100%', marginTop: 12 });
 
   return (
-    <div style={{ background: '#f3f4f6', minHeight: '100vh', padding: '0 16px' }}>
+    <div className="clk" style={{ background: '#f3f4f6', color: '#111827', colorScheme: 'light', minHeight: '100vh', padding: '0 16px' }}>
+      <style>{`.clk{color-scheme:light}.clk input{color:#111827 !important;background:#fff !important;-webkit-text-fill-color:#111827;font-size:24px !important;-webkit-appearance:none;appearance:none}.clk input::placeholder{color:#9ca3af !important;-webkit-text-fill-color:#9ca3af}`}</style>
       <div style={box}>
         <h1 style={{ fontSize: 22, margin: '0 0 4px' }}>Staff clock in</h1>
         <p style={{ color: '#6b7280', margin: '0 0 16px', fontSize: 14 }}>Enter your 6-digit code.</p>

@@ -178,7 +178,15 @@ export default function Dashboard() {
   );
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', background: '#f3f4f6', minHeight: '100vh' }}>
+    <div className="dash" style={{ fontFamily: 'system-ui, sans-serif', background: '#f3f4f6', color: '#111827', colorScheme: 'light', minHeight: '100vh', maxWidth: '100vw', overflowX: 'hidden' }}>
+      <style>{`
+        .dash{color-scheme:light;-webkit-text-size-adjust:100%}
+        .dash input:not([type=checkbox]):not([type=file]),.dash textarea,.dash select{color:#111827 !important;background:#ffffff !important;-webkit-text-fill-color:#111827;font-size:16px !important;color-scheme:light;-webkit-appearance:none;appearance:none}
+        .dash input[type=checkbox]{width:18px;height:18px;accent-color:#2563eb}
+        .dash input::placeholder,.dash textarea::placeholder{color:#9ca3af !important;-webkit-text-fill-color:#9ca3af}
+        .dash *{min-width:0}
+        .dash img{max-width:100%}
+      `}</style>
       <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onFile} />
       <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 5 }}>
         <strong>My site</strong>
