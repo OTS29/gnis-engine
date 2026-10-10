@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function SitePage({ params }) {
   const { slug } = await params;
-  const [site] = await sql`select slug, template, data, stripe_ready from sites where slug = ${slug} and published`;
+  const [site] = await sql`select id, slug, template, data, stripe_ready from sites where slug = ${slug} and published`;
   if (!site) notFound();
-  return <SiteRenderer slug={site.slug} template={site.template} data={publicData(site.data)} payOnline={!!site.stripe_ready} />;
+  const [c] = await sql`select count(*)::int as n from site_bookings where site_id = ${site.id} and lower(status) <> 'cancelled'`;
+  return <SiteRenderer slug={site.slug} template={site.template} data={publicData(site.data)} payOnline={!!site.stripe_ready} bookingCount={c?.n || 0} />;
 }
