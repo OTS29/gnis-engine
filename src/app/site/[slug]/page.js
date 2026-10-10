@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import SiteRenderer from '@/components/SiteRenderer';
 import { publicData } from '@/lib/siteDefaults';
 
-export const dynamic = 'force-dynamic';
+// Cached for 60 seconds. Saving in the dashboard refreshes it straight away.
+export const revalidate = 60;
 
 export default async function SitePage({ params }) {
   const { slug } = await params;

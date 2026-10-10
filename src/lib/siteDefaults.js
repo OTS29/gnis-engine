@@ -41,7 +41,7 @@ export function mergeData(d) {
 
 export function cleanData(d) {
   const x = mergeData(d);
-  const img = (v) => (typeof v === 'string' && v.startsWith('data:image/') ? v : '');
+  const img = (v) => (typeof v === 'string' && (v.startsWith('data:image/') || /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i.test(v)) ? v : '');
   return {
     businessName: str(x.businessName, 80),
     tagline: str(x.tagline, 140),

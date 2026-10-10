@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { sql } from '@/lib/db';
 import { getSession, isOwnerRole } from '@/lib/session';
 import { cleanData, TEMPLATE_LIST } from '@/lib/siteDefaults';
@@ -38,6 +39,7 @@ export async function PUT(req) {
     if (existing) {
       await sql`update sites set template = ${template}, data = ${json}::jsonb, updated_at = now()
                 where owner_id = ${session.userId}`;
+      revalidatePath(`/site/${existing.slug}`);
       return NextResponse.json({ ok: true, slug: existing.slug });
     }
 

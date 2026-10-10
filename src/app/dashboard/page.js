@@ -37,6 +37,17 @@ function compress(file, max = 900, q = 0.7) {
   });
 }
 
+async function uploadDataUrl(dataUrl) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const fd = new FormData();
+  fd.append('file', blob, 'photo.jpg');
+  const r = await fetch('/api/site/upload', { method: 'POST', body: fd });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'Upload failed');
+  return j.url;
+}
+const isData = (v) => typeof v === 'string' && v.startsWith('data:image/');
+
 const getJson = async (url) => { try { const r = await fetch(url); return await r.json(); } catch { return { ok: false }; } };
 const sendJson = async (url, method, body) => {
   try { const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return await r.json(); } catch { return { ok: false, error: 'Network error' }; }
@@ -96,17 +107,35 @@ export default function Dashboard() {
     try {
       if (kind === 'gallery') {
         const imgs = [];
-        for (const f of files.slice(0, 12 - data.gallery.length)) imgs.push(await compress(f, 900));
+        setMsg('Uploading…');
+        for (const f of files.slice(0, 12 - data.gallery.length)) imgs.push(await uploadDataUrl(await compress(f, 1200)));
         setData((d) => ({ ...d, gallery: [...d.gallery, ...imgs].slice(0, 12) }));
-      } else if (kind === 'hero') set('hero', await compress(files[0], 1400, 0.7));
-      else if (kind === 'product') setItem('products', idx, { image: await compress(files[0], 700) });
-    } catch { setMsg('Could not read that image'); }
+      } else if (kind === 'hero') { setMsg('Uploading…'); set('hero', await uploadDataUrl(await compress(files[0], 1920, 0.78))); }
+      else if (kind === 'product') { setMsg('Uploading…'); setItem('products', idx, { image: await uploadDataUrl(await compress(files[0], 900)) }); }
+      setMsg('Photo uploaded. Press Save to publish.');
+    } catch (err) { setMsg(err.message || 'Could not upload that image'); }
   };
 
   const save = async () => {
     setSaving(true); setMsg('');
-    const j = await sendJson('/api/site', 'PUT', { template, data });
-    if (j.ok) { const first = !slug; setSlug(j.slug); setMsg('Saved ✓'); if (first) { loadStaff(); loadStripe(); } } else setMsg(j.error || 'Save failed');
+    let toSave = data;
+    try {
+      // Move any old in-database photos to image storage so the site loads fast.
+      const swap = async (v) => (isData(v) ? await uploadDataUrl(v) : v);
+      const needs = isData(data.hero) || data.gallery.some(isData) || data.products.some((p) => isData(p.image));
+      if (needs) {
+        setMsg('Optimising photos…');
+        toSave = {
+          ...data,
+          hero: await swap(data.hero),
+          gallery: await Promise.all(data.gallery.map(swap)),
+          products: await Promise.all(data.products.map(async (p) => ({ ...p, image: await swap(p.image) }))),
+        };
+        setData(toSave);
+      }
+    } catch (err) { setMsg(err.message || 'Photo upload failed'); setSaving(false); return; }
+    const j = await sendJson('/api/site', 'PUT', { template, data: toSave });
+    if (j.ok) { const first = !slug; setSlug(j.slug); setMsg('Saved ✓ (live page updates within a minute at most)'); if (first) { loadStaff(); loadStripe(); } } else setMsg(j.error || 'Save failed');
     setSaving(false);
   };
 

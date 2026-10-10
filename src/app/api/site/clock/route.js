@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { hit, isBlocked, clientIp } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -8,6 +9,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function POST(req) {
   try {
     const b = await req.json();
+    const ip = clientIp(req);
+    const failKey = `clockfail:${String(b.slug || '')}:${ip}`;
+    if (await isBlocked(failKey, 6)) {
+      return NextResponse.json({ ok: false, error: 'Too many wrong codes. Try again in 15 minutes.' }, { status: 429 });
+    }
     const slug = String(b.slug || '');
     const code = String(b.code || '').trim();
     const action = String(b.action || 'status');
@@ -17,6 +23,7 @@ export async function POST(req) {
                   where st.slug = ${slug} and s.code = ${code} and s.active`
       : [];
     if (!staff) {
+      await hit(failKey, 6, 900);
       await wait(800);
       return NextResponse.json({ ok: false, error: 'Code not recognised' }, { status: 404 });
     }

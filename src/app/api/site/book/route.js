@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { sql } from '@/lib/db';
+import { hit, clientIp } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
 export async function POST(req) {
   try {
+    if (!(await hit(`book:ip:${clientIp(req)}`, 10, 3600)).allowed) {
+      return NextResponse.json({ ok: false, error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
     const b = await req.json();
     const slug = String(b.slug || '');
     const customer = String(b.customer || '').trim().slice(0, 80);
