@@ -10,8 +10,10 @@ export async function GET(req) {
     const session = getSession(req);
     if (!isOwnerRole(session)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
 
-    const [site] = await sql`select slug, template, data from sites where owner_id = ${session.userId}`;
-    return NextResponse.json({ ok: true, data: site || null });
+    const [site] = await sql`select slug, template, data, stripe_account_id, stripe_ready from sites where owner_id = ${session.userId}`;
+    if (!site) return NextResponse.json({ ok: true, data: null });
+    const { stripe_account_id, ...rest } = site;
+    return NextResponse.json({ ok: true, data: { ...rest, stripeConnected: !!stripe_account_id } });
   } catch (e) {
     console.error('SITE_GET_FAULT:', e);
     return NextResponse.json({ ok: false, error: 'Could not load site' }, { status: 500 });

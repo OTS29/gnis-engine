@@ -8,6 +8,9 @@ export const TEMPLATE_LIST = [
 
 export const ACCENTS = ['#2563eb', '#059669', '#dc2626', '#d97706', '#7c3aed', '#db2777', '#0f172a'];
 
+export const BOOKING_STATUSES = ['pending', 'approved', 'completed', 'cancelled'];
+export const ORDER_STATUSES = ['pending', 'paid', 'fulfilled', 'cancelled'];
+
 export const DEFAULT_DATA = {
   businessName: 'Your Business Name',
   tagline: 'What you do, in one line',
@@ -18,7 +21,7 @@ export const DEFAULT_DATA = {
   hours: 'Mon–Sat, 9am–6pm',
   accent: '#2563eb',
   hero: '',
-  services: [{ name: 'Consultation', price: 30, duration: '30 min', desc: 'A first session to talk through what you need.' }],
+  services: [{ name: 'Consultation', price: 30, duration: '30 min', desc: 'A first session to talk through what you need.', negotiable: false, minPrice: 0 }],
   products: [],
   gallery: [],
 };
@@ -49,12 +52,21 @@ export function cleanData(d) {
     hours: str(x.hours, 120),
     accent: /^#[0-9a-fA-F]{6}$/.test(x.accent) ? x.accent : DEFAULT_DATA.accent,
     hero: img(x.hero),
-    services: x.services.slice(0, 30).map((s) => ({
-      name: str(s.name, 80), price: Math.max(0, Number(s.price) || 0), duration: str(s.duration, 30), desc: str(s.desc, 300),
-    })).filter((s) => s.name),
+    services: x.services.slice(0, 30).map((s) => {
+      const price = Math.max(0, Number(s.price) || 0);
+      const minPrice = Math.min(price, Math.max(0, Number(s.minPrice) || 0));
+      const negotiable = !!s.negotiable && minPrice > 0 && minPrice < price;
+      return { name: str(s.name, 80), price, duration: str(s.duration, 30), desc: str(s.desc, 300), negotiable, minPrice: negotiable ? minPrice : 0 };
+    }).filter((s) => s.name),
     products: x.products.slice(0, 30).map((p) => ({
       name: str(p.name, 80), price: Math.max(0, Number(p.price) || 0), desc: str(p.desc, 300), image: img(p.image),
     })).filter((p) => p.name),
     gallery: x.gallery.slice(0, 12).map(img).filter(Boolean),
   };
+}
+
+// What visitors are allowed to see. The lowest accepted price must never leave the server.
+export function publicData(d) {
+  const x = mergeData(d);
+  return { ...x, services: x.services.map(({ minPrice, ...rest }) => rest) };
 }
