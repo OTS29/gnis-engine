@@ -5,26 +5,29 @@ import { hit } from '@/lib/rateLimit';
 import { getStripe, baseUrl } from '@/lib/stripe';
 import { paystack, flutterwave, toMinor, newRef } from '@/lib/payments';
 import { billingRegion, providerForRegion, priceFor, PLAN_NAMES } from '@/lib/billing';
-import { REGIONS, PLANS } from '@/lib/regions';
+import { REGIONS, PLANS, REGION_ORDER } from '@/lib/regions';
 
 export const runtime = 'nodejs';
 
-async function ctx(req) {
+async function ctx(req, chosen) {
   const s = getSession(req);
   if (!isOwnerRole(s)) return { error: NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 }) };
   const [site] = await sql`select data from sites where owner_id = ${s.userId}`;
-  const region = billingRegion(req, site?.data?.currency);
+  // The seller may pick their country; otherwise we use where they are.
+  const picked = REGION_ORDER.includes(String(chosen || '').toUpperCase()) ? String(chosen).toUpperCase() : null;
+  const region = picked || billingRegion(req, site?.data?.currency);
   return { s, region, provider: providerForRegion(region) };
 }
 
 export async function GET(req) {
   try {
-    const { s, region, provider, error } = await ctx(req);
+    const chosen = new URL(req.url).searchParams.get('region');
+    const { s, region, provider, error } = await ctx(req, chosen);
     if (error) return error;
     const [current] = await sql`select plan, cycle, status, provider, expires_at, (expires_at > now()) as active from seller_plans where user_id = ${String(s.userId)}`;
     const prices = {};
     for (const plan of ['pro', 'biz']) prices[plan] = { monthly: priceFor(region, plan, 'monthly'), yearly: priceFor(region, plan, 'yearly') };
-    return NextResponse.json({ ok: true, region, regionName: REGIONS[region].name, currency: REGIONS[region].currency, provider, prices, current: current || null });
+    return NextResponse.json({ ok: true, region, regionName: REGIONS[region].name, regions: REGION_ORDER.map((c) => ({ code: c, name: REGIONS[c].name, currency: REGIONS[c].currency })), currency: REGIONS[region].currency, provider, prices, current: current || null });
   } catch (e) {
     console.error('BILLING_GET_FAULT:', e);
     return NextResponse.json({ ok: false, error: 'Could not load billing' }, { status: 500 });
@@ -33,10 +36,10 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    const { s, region, provider, error } = await ctx(req);
+    const b = await req.json();
+    const { s, region, provider, error } = await ctx(req, b.region);
     if (error) return error;
     if (!(await hit(`billing:${s.userId}`, 15, 3600)).allowed) return NextResponse.json({ ok: false, error: 'Too many attempts. Try again later.' }, { status: 429 });
-    const b = await req.json();
     const plan = b.plan === 'biz' ? 'biz' : 'pro';
     const cycle = b.cycle === 'yearly' ? 'yearly' : 'monthly';
     if (!PLANS[region]) return NextResponse.json({ ok: false, error: 'Plans are not available in your region yet.' }, { status: 400 });

@@ -165,6 +165,18 @@ export default function LandingPage() {
     return matchesText && matchesCategory;
   });
 
+  // Plan buttons: remember the choice, then send the person to the Billing tab after they sign in.
+  const choosePlan = () => {
+    try { localStorage.setItem('gnis_after_login', 'billing'); } catch {}
+    if (currentUser && (currentUser.role === 'pro' || currentUser.role === 'admin')) { router.push('/dashboard?tab=billing'); return; }
+    openRegister('pro');
+  };
+  const afterAuth = (role) => {
+    let goBilling = false;
+    try { goBilling = localStorage.getItem('gnis_after_login') === 'billing'; localStorage.removeItem('gnis_after_login'); } catch {}
+    if (role === 'pro' || role === 'admin') return goBilling ? '/dashboard?tab=billing' : '/dashboard';
+    return '/portal/bookings';
+  };
   const openRegister = (type = 'pro') => { setRegistrationType(type); setActiveModal('register'); setMenuOpen(false); };
 
   const toggleAiService = (name, price) => {
@@ -232,7 +244,7 @@ export default function LandingPage() {
       setActiveModal(null);
       setRegName(''); setRegEmail(''); setRegPassword(''); setRegSkill('');
       setRegPostcode(''); setRegAddress(''); setIdNumberInput('');
-      router.push(registrationType === 'pro' ? '/dashboard' : '/portal/bookings');
+      router.push(afterAuth(registrationType === 'pro' ? 'pro' : 'client'));
     } catch (err) {
       setRegError(err.message);
     }
@@ -255,7 +267,7 @@ export default function LandingPage() {
         setActiveModal(null);
         setLoginEmail('');
         setLoginPassword('');
-        router.push(userRole === 'pro' || userRole === 'admin' ? '/dashboard' : '/portal/bookings');
+        router.push(afterAuth(userRole));
       }
     } catch (err) {
       setLoginError(err.message || 'Authentication failed');
@@ -690,7 +702,7 @@ export default function LandingPage() {
                 <li>✓ Online booking and calendar</li>
                 <li>✓ Priority in local search</li>
               </ul>
-              <button onClick={() => openRegister('pro')} className="w-full py-3 text-xs font-black uppercase tracking-wider bg-green-600 hover:bg-green-500 rounded-xl text-white transition">Get Professional</button>
+              <button onClick={choosePlan} className="w-full py-3 text-xs font-black uppercase tracking-wider bg-green-600 hover:bg-green-500 rounded-xl text-white transition">Get Professional</button>
             </div>
 
             <div className="p-8 rounded-3xl border border-slate-800 bg-slate-900/40 flex flex-col">
@@ -706,7 +718,7 @@ export default function LandingPage() {
                 <li>✓ Multiple locations</li>
                 <li>✓ Priority support</li>
               </ul>
-              <button onClick={() => alert("Thanks. We'll be in touch soon.")} className="w-full py-3 text-xs font-black uppercase tracking-wider bg-slate-800 hover:bg-slate-700 rounded-xl text-white transition">Contact us</button>
+              <button onClick={choosePlan} className="w-full py-3 text-xs font-black uppercase tracking-wider bg-slate-800 hover:bg-slate-700 rounded-xl text-white transition">Get Business</button>
             </div>
           </div>
         </div>

@@ -113,7 +113,12 @@ export default function Dashboard() {
   const loadAnalytics = async () => { const j = await getJson('/api/site/analytics'); if (j.ok) setAnalytics(j.data || null); };
   const loadGrowth = async () => { const j = await getJson('/api/site/growth'); if (j.ok) setGrowth(j.data || null); };
   const loadPay = async () => { const j = await getJson('/api/site/pay-setup'); if (j.ok) setPayInfo(j); };
-  const loadBilling = async () => { const j = await getJson('/api/billing'); if (j.ok) setBilling(j); };
+  const loadBilling = async (r) => { const j = await getJson('/api/billing' + (r ? `?region=${encodeURIComponent(r)}` : '')); if (j.ok) setBilling(j); };
+  const pickRegion = (code) => {
+    try { localStorage.setItem('gnis_region', code); } catch {}
+    setBilling(null);
+    loadBilling(code);
+  };
   const chooseProvider = async (provider) => {
     setPayForm({ provider, bankCode: '', accountNumber: '', accountName: '', busy: true, msg: '', ok: false });
     setBanks([]);
@@ -135,7 +140,7 @@ export default function Dashboard() {
   const turnOffCards = async () => { await sendJson('/api/site/pay-setup', 'DELETE', {}); loadPay(); };
   const startPlan = async (plan) => {
     setBillMsg('Opening payment page…');
-    const j = await sendJson('/api/billing', 'POST', { plan, cycle });
+    const j = await sendJson('/api/billing', 'POST', { plan, cycle, region: billing?.region });
     if (j.ok && j.url) window.location.href = j.url; else setBillMsg(j.error || 'Could not start payment');
   };
   const loadStripe = async () => { const j = await getJson('/api/site/stripe'); if (j.ok) setStripe({ connected: j.connected, ready: j.ready, configured: j.configured }); };
@@ -151,7 +156,9 @@ export default function Dashboard() {
         if (b.ok) setBookings(b.data || []);
         if (o.ok) setOrders(o.data || []);
         if (j.data) { loadStaff(); loadStripe(); loadAnalytics(); loadGrowth(); loadPay(); }
-        loadBilling();
+        let savedRegion = '';
+        try { savedRegion = localStorage.getItem('gnis_region') || ''; } catch {}
+        loadBilling(savedRegion);
         const qs = new URLSearchParams(window.location.search);
         if (qs.get('stripe') === 'done') setTab('payments');
         if (qs.get('tab') === 'billing') {
@@ -294,7 +301,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
             {TABS.map((x) => (
               <button key={x.id} onClick={() => setTab(x.id)} style={{ ...btn(tab === x.id ? '#111827' : '#fff'), color: tab === x.id ? '#fff' : '#111827', border: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>
                 {x.l}{x.id === 'bookings' && bookings.filter((b) => b.status === 'pending').length ? ` (${bookings.filter((b) => b.status === 'pending').length})` : ''}{x.id === 'orders' && orders.filter((o) => o.status === 'pending' || o.status === 'paid').length ? ` (${orders.filter((o) => o.status === 'pending' || o.status === 'paid').length})` : ''}
@@ -623,7 +630,13 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button style={btn(cycle === 'monthly' ? '#111827' : '#6b7280')} onClick={() => setCycle('monthly')}>Monthly</button>
                   <button style={btn(cycle === 'yearly' ? '#111827' : '#6b7280')} onClick={() => setCycle('yearly')}>Yearly (save 20%)</button>
-                  <span style={{ fontSize: 12, color: '#6b7280' }}>Prices for {billing.regionName} in {billing.currency}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: 13, color: '#374151' }}>Your country</label>
+                  <select value={billing.region} onChange={(e) => pickRegion(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13 }}>
+                    {(billing.regions || []).map((r) => <option key={r.code} value={r.code}>{r.name} ({r.currency})</option>)}
+                  </select>
+                  <span style={{ fontSize: 12, color: '#6b7280' }}>Prices in {billing.currency}</span>
                 </div>
                 {[['pro', 'Professional', 'Website builder, online booking and calendar, priority in local search'], ['biz', 'Business', 'Everything in Professional, up to 10 staff, multiple locations, priority support']].map(([key, name, blurb]) => {
                   const p = billing.prices[key][cycle];
