@@ -1,228 +1,275 @@
 'use client';
-import { useState } from 'react';
 
-export default function AdminDashboard() {
-  // 1. ADVANCED DATA STATE (Simulating Supabase structure with AI Context & Telemetry)
-  const [appointments, setAppointments] = useState([
-    { 
-      id: 1, 
-      client: "Marcus Kane", 
-      phone: "+2348169230095", 
-      service: "Standard Haircut", 
-      total: 25, 
-      status: "Pending",
-      vCode: null,
-      smsStatus: "Idle", // Idle, Sending, Delivered, Failed
-      bookingType: "AI-Negotiated", // Standard vs AI-Negotiated
-      originalPrice: 30
-    },
-    { 
-      id: 2, 
-      client: "Sarah Jenkins", 
-      phone: "+447712345678", 
-      service: "Skin Fade & Styling", 
-      total: 35, 
-      status: "Accepted",
-      vCode: 7842,
-      smsStatus: "Delivered",
-      bookingType: "Standard",
-      originalPrice: 35
-    }
-  ]);
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
-  // Local state to capture form inputs dynamically per appointment
-  const [enteredCodes, setEnteredCodes] = useState({});
+const box = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, marginBottom: 12 };
+const input = { padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14, width: '100%', boxSizing: 'border-box' };
+const btn = (bg = '#2563eb') => ({ background: bg, color: '#fff', border: 0, borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' });
+const th = { textAlign: 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: '#6b7280', padding: '8px 10px', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' };
+const td = { padding: '10px', borderBottom: '1px solid #f3f4f6', fontSize: 13, verticalAlign: 'top' };
 
-  // Computes current dashboard yield metrics instantly from the state
-  const completedRevenue = appointments
-    .filter(app => app.status === "Completed")
-    .reduce((sum, app) => sum + app.total, 0);
+const call = async (url, method = 'GET', body) => {
+  try {
+    const r = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { ...j, status: r.status };
+  } catch { return { ok: false, error: 'Network error', status: 0 }; }
+};
+const day = (v) => (v ? new Date(v).toLocaleDateString('en-GB') : 'never');
+const daysAgo = (v) => (v ? Math.floor((Date.now() - new Date(v).getTime()) / 86400000) : null);
 
-  // 2. THE "BRAIN" - Logic to Approve and Generate Code with Telemetry simulation
-  const approveBooking = (id, clientPhone, clientName) => {
-    const generatedCode = Math.floor(1000 + Math.random() * 9000);
-    
-    // Simulate initial network outbound pulse
-    setAppointments(prev => prev.map(app => 
-      app.id === id ? { ...app, status: 'Accepted', vCode: generatedCode, smsStatus: 'Sending' } : app
-    ));
-
-    // Simulate carrier delivery verification 1 second later
-    setTimeout(() => {
-      setAppointments(prev => prev.map(app => 
-        app.id === id ? { ...app, smsStatus: 'Delivered' } : app
-      ));
-    }, 1200);
-
-    alert(`APPROVED!\nNotification sequence initiated for ${clientName}.\nVerification Code: ${generatedCode}`);
-  };
-
-  // Secure validation handshake check
-  const handleVerifyCodeSubmission = (id, correctCode) => {
-    const userInput = enteredCodes[id];
-    
-    if (String(userInput) === String(correctCode)) {
-      setAppointments(prev => prev.map(app => 
-        app.id === id ? { ...app, status: 'Completed' } : app
-      ));
-      alert("🎉 Security Token Confirmed. Appointment marked Completed.");
-    } else {
-      alert("⚠️ Access Token Mismatch. Please re-read the code from the client's handset.");
-    }
-  };
-
-  const flagNoShow = (id) => {
-    if(confirm("Flag this profile as a No-Show? This terminates the verification vector.")) {
-      setAppointments(prev => prev.map(app => 
-        app.id === id ? { ...app, status: 'No-Show' } : app
-      ));
-    }
-  };
-
+function Stat({ label, value, sub }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-8 font-sans selection:bg-green-500/20">
-      <div className="max-w-4xl mx-auto">
-        
-        {/* HEADER & METRIC CARD */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 pb-6 border-b border-slate-900 gap-4">
-          <div>
-            <h1 className="text-4xl font-black text-green-500 tracking-tighter italic">GNIS COMMAND</h1>
-            <p className="text-xs text-slate-500 font-mono mt-1">Operational Control Layer v2.1 // Secure Framework Protocols</p>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 px-6 py-4 rounded-2xl flex flex-col min-w-[200px]">
-            <span className="text-[10px] font-mono tracking-widest uppercase text-slate-500">Settled Revenue</span>
-            <span className="text-2xl font-black text-green-400">£{completedRevenue}.00</span>
-          </div>
-        </div>
+    <div style={{ ...box, marginBottom: 0, flex: '1 1 150px' }}>
+      <div style={{ fontSize: 12, color: '#6b7280' }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: '#9ca3af' }}>{sub}</div>}
+    </div>
+  );
+}
 
-        {/* FEED GRID */}
-        <div className="space-y-6">
-          {appointments.map((app) => (
-            <div 
-              key={app.id} 
-              className={`bg-slate-900 border transition-all duration-300 p-8 rounded-[2.5rem] ${
-                app.status === 'Completed' ? 'border-emerald-500/20 opacity-60' : 
-                app.status === 'No-Show' ? 'border-rose-500/20 opacity-40' : 'border-slate-800'
-              }`}
-            >
-              <div className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4">
-                <div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h2 className="text-2xl font-black tracking-tight">{app.client}</h2>
-                    
-                    {/* Dynamic Booking Type Badge */}
-                    {app.bookingType === 'AI-Negotiated' && (
-                      <span className="bg-amber-500/10 text-amber-400 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border border-amber-500/20">
-                        🤖 AI Price Match (-£{app.originalPrice - app.total})
-                      </span>
-                    )}
+function Bars({ rows, labelKey, valueKey }) {
+  const max = Math.max(1, ...rows.map((r) => r[valueKey]));
+  if (!rows.length) return <div style={{ fontSize: 13, color: '#6b7280' }}>Nothing yet.</div>;
+  return rows.map((r) => (
+    <div key={r[labelKey]} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 13 }}>
+      <div style={{ width: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r[labelKey]}</div>
+      <div style={{ flex: 1, background: '#f3f4f6', borderRadius: 6, height: 14 }}><div style={{ width: `${(r[valueKey] / max) * 100}%`, background: '#2563eb', height: 14, borderRadius: 6 }} /></div>
+      <div style={{ width: 32, textAlign: 'right', fontWeight: 600 }}>{r[valueKey]}</div>
+    </div>
+  ));
+}
 
-                    {/* Operational Status Tracking Badge */}
-                    <span className={`text-[9px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
-                      app.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-400' :
-                      app.status === 'Accepted' ? 'bg-blue-500/10 text-blue-400' :
-                      app.status === 'No-Show' ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800 text-slate-400'
-                    }`}>
-                      {app.status}
-                    </span>
-                  </div>
-                  
-                  {/* Phone & Carrier Infrastructure Verification Pill */}
-                  <div className="flex items-center gap-2 mt-2">
-                    <p className="text-slate-400 font-mono text-xs">{app.phone}</p>
-                    {app.status === 'Accepted' && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                        app.smsStatus === 'Delivered' ? 'bg-emerald-950 text-emerald-400' :
-                        app.smsStatus === 'Sending' ? 'bg-amber-950 text-amber-400 animate-pulse' : 'bg-slate-950 text-slate-500'
-                      }`}>
-                        <span className={`w-1 h-1 rounded-full ${app.smsStatus === 'Delivered' ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-                        SMS {app.smsStatus}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wide mt-1">{app.service}</p>
-                </div>
+export default function Admin() {
+  const [tab, setTab] = useState('overview');
+  const [state, setState] = useState('loading'); // loading | ok | denied
+  const [ov, setOv] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [log, setLog] = useState([]);
+  const [q, setQ] = useState('');
+  const [role, setRole] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [sort, setSort] = useState('best');
+  const [open, setOpen] = useState(null);
+  const [edit, setEdit] = useState({});
+  const [note, setNote] = useState('');
+  const [msg, setMsg] = useState('');
+  const [del, setDel] = useState('');
+  const [add, setAdd] = useState({ email: '', name: '', role: 'client', country: '', skill: '', password: '' });
 
-                <div className="text-left sm:text-right">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Secure Rate</p>
-                  <p className="text-3xl font-black text-green-400 tracking-tight">£{app.total}</p>
-                </div>
-              </div>
+  const load = async () => {
+    const [o, u] = await Promise.all([call('/api/admin/overview'), call('/api/admin/users')]);
+    if (o.status === 401 || o.status === 403 || u.status === 403) { setState('denied'); return; }
+    if (o.ok) setOv(o);
+    if (u.ok) setUsers(u.data || []);
+    setState('ok');
+  };
+  useEffect(() => { load(); }, []);
+  useEffect(() => { if (tab === 'log') call('/api/admin/log').then((j) => j.ok && setLog(j.data || [])); }, [tab]);
 
-              {/* ACTION MATRIX */}
-              {app.status === 'Pending' && (
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => approveBooking(app.id, app.phone, app.client)}
-                    className="bg-green-600 hover:bg-green-500 px-6 py-3.5 rounded-xl font-black text-[10px] tracking-widest uppercase transition-colors"
-                  >
-                    Approve & Issue Verification Code
-                  </button>
-                  <button className="bg-slate-800 hover:bg-slate-700 px-6 py-3.5 rounded-xl font-black text-[10px] tracking-widest uppercase text-slate-400 transition-colors">
-                    Reschedule
-                  </button>
-                </div>
-              )}
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    let list = users.filter((u) => {
+      if (role !== 'all' && u.role !== role) return false;
+      if (status === 'active' && u.suspended) return false;
+      if (status === 'deactivated' && !u.suspended) return false;
+      if (status === 'paying' && !u.plan_active) return false;
+      if (status === 'inactive') { const d = daysAgo(u.last_login_at); if (!(d === null || d >= 30)) return false; }
+      if (!s) return true;
+      return [u.name, u.email, u.skill, u.country, u.region, u.slug].some((v) => String(v || '').toLowerCase().includes(s));
+    });
+    const by = {
+      best: (a, b) => b.score - a.score,
+      newest: (a, b) => new Date(b.created_at) - new Date(a.created_at),
+      oldest: (a, b) => new Date(a.created_at) - new Date(b.created_at),
+      login: (a, b) => new Date(b.last_login_at || 0) - new Date(a.last_login_at || 0),
+    }[sort];
+    return [...list].sort(by);
+  }, [users, q, role, status, sort]);
 
-              {/* LIVE HANDSHAKE INTERFACE VERIFICATION MODULE */}
-              {app.status === 'Accepted' && (
-                <div className="mt-4 p-6 bg-black/40 rounded-3xl border border-green-500/20 animate-in fade-in zoom-in-95 duration-300">
-                  <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <p className="text-[10px] font-black text-green-500 uppercase tracking-widest">Client Handshake Verification</p>
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span>
-                    </div>
-                    <span className="text-xs font-mono bg-green-500/10 text-green-400 px-2.5 py-1 rounded-md border border-green-500/10">
-                      System Key Generated: <strong className="font-bold text-white tracking-wider">{app.vCode}</strong>
-                    </span>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      maxLength={4}
-                      placeholder="Enter 4-digit code from client handset" 
-                      value={enteredCodes[app.id] || ''}
-                      onChange={(e) => setEnteredCodes({ ...enteredCodes, [app.id]: e.target.value })}
-                      className="bg-slate-800 border border-slate-700/60 rounded-xl px-4 py-3 text-sm flex-1 outline-none text-white font-mono tracking-widest focus:ring-2 focus:ring-green-500/50 focus:border-green-500 transition-all"
-                    />
-                    <button 
-                      onClick={() => handleVerifyCodeSubmission(app.id, app.vCode)}
-                      className="bg-white text-black px-6 py-3 rounded-xl text-[10px] font-black hover:bg-green-500 hover:text-white transition-colors uppercase tracking-wider"
-                    >
-                      Verify & Settle
-                    </button>
-                  </div>
-                  
-                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-800/60">
-                    <p className="text-[9px] text-slate-500 italic">Verify token to reconcile workspace ledger.</p>
-                    <button 
-                      onClick={() => flagNoShow(app.id)} 
-                      className="text-rose-500 hover:text-rose-400 text-[9px] uppercase font-black tracking-widest hover:underline"
-                    >
-                      Flag No-Show ✕
-                    </button>
-                  </div>
-                </div>
-              )}
+  const pick = (u) => {
+    if (open === u.id) { setOpen(null); return; }
+    setOpen(u.id); setEdit({ name: u.name || '', country: u.country || '', skill: u.skill || '' }); setNote(u.admin_note || ''); setMsg(''); setDel('');
+  };
+  const act = async (u, body, okMsg) => {
+    setMsg('Working…');
+    const j = await call('/api/admin/users', 'PATCH', { id: u.id, ...body });
+    if (j.ok) { setMsg(j.password ? `${okMsg} Temporary password: ${j.password} (shown once, give it to the user and ask them to change it).` : okMsg); load(); }
+    else setMsg(j.error || 'Something went wrong');
+  };
+  const remove = async (u) => {
+    setMsg('Deleting…');
+    const j = await call('/api/admin/users', 'DELETE', { id: u.id, confirm: del });
+    if (j.ok) { setOpen(null); setMsg(''); load(); } else setMsg(j.error || 'Could not delete');
+  };
+  const create = async (e) => {
+    e.preventDefault(); setMsg('Adding…');
+    const j = await call('/api/admin/users', 'POST', add);
+    if (j.ok) { setMsg(`Added ${j.user.email}. Temporary password: ${j.password} (shown once).`); setAdd({ email: '', name: '', role: 'client', country: '', skill: '', password: '' }); load(); }
+    else setMsg(j.error || 'Could not add');
+  };
 
-              {/* ARCHIVED SECURE STATES VISUALS */}
-              {app.status === 'Completed' && (
-                <div className="mt-2 text-xs font-mono text-emerald-400 font-bold bg-emerald-950/20 p-4 border border-emerald-500/10 rounded-2xl flex items-center gap-2">
-                  <span>✓</span> Secure Transaction Verified & Cleared via Verification Token Matrix.
-                </div>
-              )}
+  if (state === 'loading') return <div style={{ padding: 24, fontFamily: 'system-ui' }}>Loading…</div>;
+  if (state === 'denied') return (
+    <div style={{ padding: 24, fontFamily: 'system-ui', maxWidth: 520 }}>
+      <h2>Admins only</h2>
+      <p>You need to be logged in with an admin account to open this page. If this is your account, make sure it is set as admin in the database, then log out and log in again.</p>
+      <a href="/" style={{ color: '#2563eb' }}>Back to the home page</a>
+    </div>
+  );
 
-              {app.status === 'No-Show' && (
-                <div className="mt-2 text-xs font-mono text-rose-400 font-bold bg-rose-950/20 p-4 border border-rose-500/10 rounded-2xl flex items-center gap-2">
-                  <span>✕</span> Entry Revoked. Marked as No-Show by admin command.
-                </div>
-              )}
+  const t = ov?.totals || {};
+  return (
+    <div style={{ minHeight: '100vh', background: '#f3f4f6', fontFamily: 'system-ui, sans-serif', color: '#111827' }}>
+      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: 18 }}>GNIS admin</strong>
+        <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <a href="/api/admin/export" style={{ ...btn('#16a34a'), textDecoration: 'none' }}>Download Excel</a>
+          <a href="/dashboard" style={{ ...btn('#6b7280'), textDecoration: 'none' }}>My dashboard</a>
+        </span>
+      </header>
 
-            </div>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: 20 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          {[['overview', 'Overview'], ['users', `Users (${users.length})`], ['add', 'Add user'], ['log', 'Activity log']].map(([id, l]) => (
+            <button key={id} onClick={() => { setTab(id); setMsg(''); }} style={{ ...btn(tab === id ? '#111827' : '#fff'), color: tab === id ? '#fff' : '#111827', border: '1px solid #e5e7eb' }}>{l}</button>
           ))}
         </div>
-      </div>
+
+        {tab === 'overview' && ov && (<>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+            <Stat label="Total users" value={t.users} sub={`${t.pros} pros · ${t.clients} clients · ${t.admins} admin`} />
+            <Stat label="New in 7 days" value={t.new7} sub={`${t.new30} in 30 days`} />
+            <Stat label="Active in 30 days" value={t.active30} sub="logged in recently" />
+            <Stat label="Paying plans" value={t.paying} />
+            <Stat label="Websites live" value={t.published} sub={`${t.withSite} created`} />
+            <Stat label="Bookings / orders" value={`${t.bookings} / ${t.orders}`} />
+            <Stat label="Deactivated" value={t.suspended} />
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ ...box, flex: '1 1 300px' }}><strong>Sign-ups by month</strong><div style={{ marginTop: 10 }}><Bars rows={ov.monthly} labelKey="month" valueKey="n" /></div></div>
+            <div style={{ ...box, flex: '1 1 300px' }}><strong>Users by country</strong><div style={{ marginTop: 10 }}><Bars rows={ov.byCountry.slice(0, 10)} labelKey="name" valueKey="n" /></div></div>
+            <div style={{ ...box, flex: '1 1 300px' }}><strong>Professionals by trade</strong><div style={{ marginTop: 10 }}><Bars rows={ov.byProfession.slice(0, 10)} labelKey="name" valueKey="n" /></div></div>
+          </div>
+          <div style={{ ...box }}>
+            <strong>Best users right now</strong>
+            <div style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 8px' }}>Score = bookings + 2 × orders + page views ÷ 20.</div>
+            {[...users].filter((u) => u.role === 'pro').sort((a, b) => b.score - a.score).slice(0, 5).map((u, i) => (
+              <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: i ? '1px solid #f3f4f6' : 0, fontSize: 14 }}>
+                <span>{i + 1}. {u.name || u.email} <span style={{ color: '#6b7280' }}>· {u.skill || 'no trade'}</span></span>
+                <span><b>{u.score}</b> <span style={{ color: '#6b7280', fontSize: 12 }}>({u.bookings} bookings, {u.orders} orders, {u.views} views)</span></span>
+              </div>
+            ))}
+          </div>
+        </>)}
+
+        {tab === 'users' && (<>
+          <div style={{ ...box, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input style={{ ...input, flex: '2 1 220px', width: 'auto' }} placeholder="Search name, email, trade, country or site…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <select style={{ ...input, flex: '1 1 110px', width: 'auto' }} value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="all">All roles</option><option value="pro">Professionals</option><option value="client">Clients</option><option value="admin">Admins</option>
+            </select>
+            <select style={{ ...input, flex: '1 1 130px', width: 'auto' }} value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="all">Any status</option><option value="active">Active</option><option value="paying">Paying</option><option value="inactive">Inactive 30+ days</option><option value="deactivated">Deactivated</option>
+            </select>
+            <select style={{ ...input, flex: '1 1 130px', width: 'auto' }} value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="best">Best first</option><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="login">Last login</option>
+            </select>
+          </div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Showing {shown.length} of {users.length}</div>
+          <div style={{ ...box, padding: 0, overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
+              <thead><tr>{['User', 'Role', 'Country', 'Plan', 'Bookings', 'Orders', 'Views', 'Score', 'Joined', 'Last login'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {shown.map((u) => (<Fragment key={u.id}>
+                  <tr onClick={() => pick(u)} style={{ cursor: 'pointer', background: open === u.id ? '#eff6ff' : u.suspended ? '#fef2f2' : '#fff' }}>
+                    <td style={td}><b>{u.name || '(no name)'}</b>{u.suspended && <span style={{ color: '#b91c1c', fontSize: 11 }}> · deactivated</span>}<div style={{ color: '#6b7280', fontSize: 12 }}>{u.email}</div></td>
+                    <td style={td}>{u.role}</td>
+                    <td style={td}>{u.country || u.region || '-'}</td>
+                    <td style={td}>{u.plan_active ? (u.plan === 'biz' ? 'Business' : 'Professional') : 'Starter'}</td>
+                    <td style={td}>{u.bookings}</td><td style={td}>{u.orders}</td><td style={td}>{u.views}</td><td style={td}><b>{u.score}</b></td>
+                    <td style={td}>{day(u.created_at)}</td><td style={td}>{day(u.last_login_at)}</td>
+                  </tr>
+                  {open === u.id && (
+                    <tr><td colSpan={10} style={{ ...td, background: '#f9fafb' }}>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        <div style={{ flex: '1 1 260px' }}>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>Details</div>
+                          <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                            {u.skill && <div>Trade: {u.skill}{u.rate ? ` (${u.rate})` : ''}</div>}
+                            {u.address && <div>Address: {u.address} {u.postcode}</div>}
+                            {u.verification_method && <div>ID type: {u.verification_method}</div>}
+                            {u.slug && <div>Website: <a href={`/site/${u.slug}`} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>/site/{u.slug}</a> ({u.published ? 'live' : 'offline'})</div>}
+                          </div>
+                          <div style={{ fontWeight: 700, margin: '12px 0 6px' }}>Edit</div>
+                          <input style={{ ...input, marginBottom: 6 }} placeholder="Name" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+                          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                            <input style={input} placeholder="Country (e.g. NG)" value={edit.country} onChange={(e) => setEdit({ ...edit, country: e.target.value })} />
+                            <input style={input} placeholder="Trade" value={edit.skill} onChange={(e) => setEdit({ ...edit, skill: e.target.value })} />
+                          </div>
+                          <button style={btn()} onClick={() => act(u, { action: 'edit', ...edit }, 'Saved.')}>Save changes</button>
+                        </div>
+                        <div style={{ flex: '1 1 260px' }}>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>Private note</div>
+                          <textarea style={{ ...input, minHeight: 70 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Only admins can see this" />
+                          <button style={{ ...btn('#374151'), marginTop: 6 }} onClick={() => act(u, { action: 'note', note }, 'Note saved.')}>Save note</button>
+                          <div style={{ fontWeight: 700, margin: '14px 0 6px' }}>Role</div>
+                          <select style={input} value={u.role} onChange={(e) => act(u, { action: 'role', role: e.target.value }, 'Role changed. They need to log in again.')}>
+                            <option value="pro">Professional</option><option value="client">Client</option><option value="admin">Admin</option>
+                          </select>
+                        </div>
+                        <div style={{ flex: '1 1 260px' }}>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>Help and remove</div>
+                          <button style={btn('#d97706')} onClick={() => confirm(`Issue a new temporary password for ${u.email}? Their old password stops working.`) && act(u, { action: 'reset_password' }, 'Password reset.')}>Reset password</button>
+                          <div style={{ height: 8 }} />
+                          {u.suspended
+                            ? <button style={btn('#16a34a')} onClick={() => act(u, { action: 'unsuspend' }, 'Reactivated. Their site stays offline until they save it again.')}>Reactivate</button>
+                            : <button style={btn('#6b7280')} onClick={() => confirm(`Deactivate ${u.email}? They cannot log in and their website goes offline. You can reverse this.`) && act(u, { action: 'suspend' }, 'Deactivated.')}>Deactivate (reversible)</button>}
+                          <div style={{ fontSize: 12, color: '#b91c1c', margin: '14px 0 6px', fontWeight: 700 }}>Delete permanently</div>
+                          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Removes the account, website, bookings, orders and plan records. Download the Excel first if you need a copy. Type their email to confirm.</div>
+                          <input style={{ ...input, marginBottom: 6 }} placeholder={u.email} value={del} onChange={(e) => setDel(e.target.value)} />
+                          <button style={btn('#dc2626')} disabled={del.trim().toLowerCase() !== String(u.email).toLowerCase()} onClick={() => remove(u)}>Delete forever</button>
+                        </div>
+                      </div>
+                      {msg && <div style={{ marginTop: 10, fontSize: 13, color: '#111827', background: '#fef9c3', borderRadius: 8, padding: 8, wordBreak: 'break-word' }}>{msg}</div>}
+                    </td></tr>
+                  )}
+                </Fragment>))}
+                {!shown.length && <tr><td colSpan={10} style={{ ...td, color: '#6b7280' }}>No users match.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>)}
+
+        {tab === 'add' && (
+          <form onSubmit={create} style={{ ...box, maxWidth: 520 }}>
+            <strong>Add a user</strong>
+            <div style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>Leave the password empty and we make a temporary one for you to pass on.</div>
+            <input style={{ ...input, marginBottom: 8 }} type="email" required placeholder="Email" value={add.email} onChange={(e) => setAdd({ ...add, email: e.target.value })} />
+            <input style={{ ...input, marginBottom: 8 }} placeholder="Name" value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} />
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <select style={input} value={add.role} onChange={(e) => setAdd({ ...add, role: e.target.value })}><option value="client">Client</option><option value="pro">Professional</option><option value="admin">Admin</option></select>
+              <input style={input} placeholder="Country (e.g. GB)" value={add.country} onChange={(e) => setAdd({ ...add, country: e.target.value })} />
+            </div>
+            <input style={{ ...input, marginBottom: 8 }} placeholder="Trade (for professionals)" value={add.skill} onChange={(e) => setAdd({ ...add, skill: e.target.value })} />
+            <input style={{ ...input, marginBottom: 10 }} placeholder="Password (optional, 8+ characters)" value={add.password} onChange={(e) => setAdd({ ...add, password: e.target.value })} />
+            <button style={btn()} type="submit">Add user</button>
+            {msg && <div style={{ marginTop: 10, fontSize: 13, background: '#fef9c3', borderRadius: 8, padding: 8, wordBreak: 'break-word' }}>{msg}</div>}
+          </form>
+        )}
+
+        {tab === 'log' && (
+          <div style={{ ...box, padding: 0, overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+              <thead><tr>{['When', 'Admin', 'Action', 'User', 'Detail'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {log.map((l) => <tr key={l.id}><td style={td}>{l.at}</td><td style={td}>{l.admin_email}</td><td style={td}>{l.action}</td><td style={td}>{l.target_email || '-'}</td><td style={td}>{l.detail}</td></tr>)}
+                {!log.length && <tr><td colSpan={5} style={{ ...td, color: '#6b7280' }}>No admin actions yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

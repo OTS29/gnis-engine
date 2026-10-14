@@ -32,6 +32,17 @@ export async function login(formData: FormData) {
       return { error: 'Invalid identity credentials' }
     }
 
+    // Deactivated by an admin: the password was right, but they cannot sign in.
+    if (user.suspended) {
+      return { error: 'This account has been deactivated. Please contact support.' }
+    }
+
+    try {
+      await sql`update users set last_login_at = now() where id = ${user.id}`
+    } catch (e) {
+      console.error('LAST_LOGIN_FAULT:', e)
+    }
+
     await createSession(user as { id: string; role: string })
     return {
       success: true,
@@ -55,6 +66,7 @@ export async function signup(formData: FormData) {
     // Only 'client' or 'pro' can be chosen from the form; nobody can self-register as admin
     const role = formData.get('role') === 'client' ? 'client' : 'pro'
     const region = (formData.get('region') as string) || null
+    const country = String((formData.get('country') as string) || '').trim().slice(0, 4) || null
     const skill = (formData.get('skill') as string) || null
     const rate = (formData.get('rate') as string) || null
     const address = (formData.get('address') as string) || null
@@ -72,6 +84,14 @@ export async function signup(formData: FormData) {
       on conflict (email) do nothing
       returning id, name, role`
     if (!rows.length) return { error: 'Account already exists' }
+
+    // Remember which country they chose. A fault here must never block sign-up.
+    try {
+      if (country) await sql`update users set country = ${country}, last_login_at = now() where id = ${rows[0].id}`
+      else await sql`update users set last_login_at = now() where id = ${rows[0].id}`
+    } catch (e) {
+      console.error('SIGNUP_COUNTRY_FAULT:', e)
+    }
 
     await createSession(rows[0] as { id: string; role: string })
     return { success: true, user: rows[0] }
