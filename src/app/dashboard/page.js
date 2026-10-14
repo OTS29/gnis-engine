@@ -99,6 +99,7 @@ export default function Dashboard() {
   const [banks, setBanks] = useState([]);
   const [stripeCountry, setStripeCountry] = useState('GB');
   const [billing, setBilling] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [cycle, setCycle] = useState('monthly');
   const [billMsg, setBillMsg] = useState('');
   const [stripe, setStripe] = useState({ connected: false, ready: false, configured: true });
@@ -159,6 +160,7 @@ export default function Dashboard() {
         let savedRegion = '';
         try { savedRegion = localStorage.getItem('gnis_region') || ''; } catch {}
         loadBilling(savedRegion);
+        getJson('/api/users/get').then((u) => { if (u?.ok && u.data?.role === 'admin') setIsAdmin(true); });
         const qs = new URLSearchParams(window.location.search);
         if (qs.get('stripe') === 'done') setTab('payments');
         if (qs.get('tab') === 'billing') {
@@ -284,6 +286,7 @@ export default function Dashboard() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: tooBig ? '#dc2626' : '#6b7280' }}>{sizeKB} KB / 3800</span>
           {msg && <span style={{ fontSize: 13 }}>{msg}</span>}
+          {isAdmin && <a href="/admin" style={{ fontSize: 14, color: '#7c3aed', fontWeight: 600 }}>Admin console</a>}
           {slug && <a href={`/site/${slug}`} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: '#2563eb' }}>View live site ↗</a>}
           <button style={btn('#2563eb')} onClick={save} disabled={saving || tooBig}>{saving ? 'Saving…' : 'Save'}</button>
           <form action={logout}><button style={btn('#6b7280')}>Log out</button></form>

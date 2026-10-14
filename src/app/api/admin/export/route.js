@@ -32,7 +32,7 @@ export async function GET(req) {
     XLSX.utils.book_append_sheet(wb, bws, 'Best users');
 
     const c = {};
-    for (const u of users) { const k = u.country || u.region || 'Unknown'; c[k] = (c[k] || 0) + 1; }
+    for (const u of users) { let k = String(u.country || u.region || 'Unknown').toUpperCase(); if (k === 'UK') k = 'GB'; c[k] = (c[k] || 0) + 1; }
     const cws = XLSX.utils.aoa_to_sheet([['Country', 'Users'], ...Object.entries(c).sort((a, b) => b[1] - a[1])]);
     cws['!cols'] = [{ wch: 18 }, { wch: 8 }];
     XLSX.utils.book_append_sheet(wb, cws, 'By country');

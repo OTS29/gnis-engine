@@ -37,6 +37,23 @@ const realUserReviews = [
   { id: 3, text: "My calendar, invoices and customer list live together. It feels like having an assistant.", user: "Sample: Event Caterer", type: "Events & Catering" }
 ];
 
+// Password box with an eye button: hidden by default, click to show, click again to hide.
+function PasswordInput({ value, onChange, className, placeholder, required, minLength, autoComplete }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input type={show ? 'text' : 'password'} required={required} minLength={minLength} autoComplete={autoComplete} value={value} onChange={onChange} placeholder={placeholder} className={`${className} pr-12`} />
+      <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide password' : 'Show password'} title={show ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition">
+        {show ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -58,6 +75,9 @@ export default function LandingPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [regError, setRegError] = useState('');
 
@@ -176,6 +196,16 @@ export default function LandingPage() {
     try { goBilling = localStorage.getItem('gnis_after_login') === 'billing'; localStorage.removeItem('gnis_after_login'); } catch {}
     if (role === 'pro' || role === 'admin') return goBilling ? '/dashboard?tab=billing' : '/dashboard';
     return '/portal/bookings';
+  };
+  const requestReset = async (e) => {
+    e.preventDefault();
+    setResetBusy(true); setResetMsg('');
+    try {
+      const r = await fetch('/api/auth/forgot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: resetEmail }) });
+      const j = await r.json().catch(() => ({}));
+      setResetMsg(j.ok ? 'If that email has an account, a reset link is on its way. It works for one hour. Check your spam folder too.' : (j.error || 'Something went wrong. Try again.'));
+    } catch { setResetMsg('Network error. Try again.'); }
+    setResetBusy(false);
   };
   const openRegister = (type = 'pro') => { setRegistrationType(type); setActiveModal('register'); setMenuOpen(false); };
 
@@ -795,7 +825,7 @@ export default function LandingPage() {
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Password</label>
                       <button type="button" onClick={() => setActiveModal('reset')} className="text-[9px] font-black uppercase tracking-widest text-green-500 hover:underline">Forgot?</button>
                     </div>
-                    <input type="password" required value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-500/50 text-white" placeholder="••••••••" />
+                    <PasswordInput required autoComplete="current-password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-500/50 text-white" placeholder="Your password" />
                   </div>
 
                   {loginError && (
@@ -845,7 +875,7 @@ export default function LandingPage() {
                   )}
 
                   <input type="email" placeholder="Email address" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
-                  <input type="password" placeholder="Password (min 8 characters)" required minLength={8} value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
+                  <PasswordInput placeholder="Password (min 8 characters)" required minLength={8} autoComplete="new-password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
 
                   {targetRegion === 'UK' ? (
                     <div className="grid grid-cols-3 gap-3">
@@ -887,10 +917,11 @@ export default function LandingPage() {
             {activeModal === 'reset' && (
               <div>
                 <h3 className="text-2xl font-black italic tracking-tighter text-green-500 mb-1 mt-4 uppercase">Reset password</h3>
-                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-8">Password recovery is not available yet</p>
-                <form onSubmit={(e) => { e.preventDefault(); alert("Password recovery is coming soon. Please contact support."); setActiveModal('login'); }} className="space-y-6">
-                  <input type="email" placeholder="Your email" required className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
-                  <button type="submit" className="w-full bg-white text-black py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-green-600 hover:text-white transition">Request reset</button>
+                <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider mb-8">We will email you a link to choose a new password</p>
+                <form onSubmit={requestReset} className="space-y-6">
+                  <input type="email" placeholder="Your email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
+                  {resetMsg && <p className="text-green-400 text-[11px] font-medium bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3">{resetMsg}</p>}
+                  <button type="submit" disabled={resetBusy} className="w-full bg-white text-black py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-green-600 hover:text-white transition disabled:opacity-60">{resetBusy ? 'Sending…' : 'Email me a reset link'}</button>
                 </form>
                 <button onClick={() => setActiveModal('login')} className="mt-6 w-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white">Back to log in</button>
               </div>

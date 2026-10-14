@@ -38,7 +38,7 @@ export async function GET(req) {
         new7: since(7), new30: since(30), active30,
         bookings: t.bookings, orders: t.orders,
       },
-      byCountry: count((u) => u.country || u.region),
+      byCountry: count((u) => { const c = String(u.country || u.region || '').toUpperCase(); return c === 'UK' ? 'GB' : c; }),
       byProfession: count((u) => (u.role === 'pro' ? u.skill : null)).filter((x) => x.name !== 'Unknown'),
       monthly,
     });
