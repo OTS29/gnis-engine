@@ -31,11 +31,15 @@ export async function POST(req) {
     const [site] = await sql`select id, stripe_account_id from sites where owner_id = ${s.userId}`;
     if (!site) return NextResponse.json({ ok: false, error: 'Save your site first, then connect payouts.' }, { status: 400 });
 
+    let body = {};
+    try { body = await req.json(); } catch {}
+    const STRIPE_COUNTRIES = ['GB', 'IE', 'FR', 'DE', 'ES', 'IT', 'NL', 'BE', 'PT', 'AT', 'US', 'CA', 'AU'];
+    const country = STRIPE_COUNTRIES.includes(String(body.country)) ? String(body.country) : 'GB';
     let account = site.stripe_account_id;
     if (!account) {
       const created = await stripe.accounts.create({
         type: 'express',
-        country: 'GB',
+        country,
         capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
       });
       account = created.id;

@@ -4,12 +4,13 @@ import { notFound } from 'next/navigation';
 import SiteRenderer from '@/components/SiteRenderer';
 import { publicData } from '@/lib/siteDefaults';
 import { SITE_URL } from '@/lib/site';
+import { providerForSite } from '@/lib/payments';
 
 // Cached for 60 seconds. Saving in the dashboard refreshes it straight away.
 export const revalidate = 60;
 
 const load = cache(async (slug) => {
-  const [site] = await sql`select id, slug, template, data, stripe_ready from sites where slug = ${slug} and published`;
+  const [site] = await sql`select id, slug, template, data, stripe_ready, stripe_account_id, pay_provider, pay_account, pay_ready from sites where slug = ${slug} and published`;
   if (!site) return null;
   const [c] = await sql`select count(*)::int as n from site_bookings where site_id = ${site.id} and lower(status) <> 'cancelled'`;
   return { site, count: c?.n || 0 };
@@ -45,7 +46,7 @@ export default async function SitePage({ params }) {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
-      <SiteRenderer slug={site.slug} template={site.template} data={publicData(site.data)} payOnline={!!site.stripe_ready} bookingCount={count} />
+      <SiteRenderer slug={site.slug} template={site.template} data={publicData(site.data)} payOnline={!!providerForSite(site)} bookingCount={count} />
     </>
   );
 }

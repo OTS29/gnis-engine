@@ -16,6 +16,7 @@ const TABS = [
   { id: 'staff', l: 'Staff' },
   { id: 'growth', l: 'Growth' },
   { id: 'payments', l: 'Payments' },
+  { id: 'billing', l: 'Billing' },
 ];
 
 const STATUS_COLOR = { pending: '#d97706', approved: '#2563eb', completed: '#059669', paid: '#059669', fulfilled: '#2563eb', cancelled: '#dc2626', no_show: '#7f1d1d' };
@@ -93,6 +94,13 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [growth, setGrowth] = useState(null);
   const [qr, setQr] = useState('');
+  const [payInfo, setPayInfo] = useState(null);
+  const [payForm, setPayForm] = useState({ provider: '', bankCode: '', accountNumber: '', accountName: '', busy: false, msg: '', ok: false });
+  const [banks, setBanks] = useState([]);
+  const [stripeCountry, setStripeCountry] = useState('GB');
+  const [billing, setBilling] = useState(null);
+  const [cycle, setCycle] = useState('monthly');
+  const [billMsg, setBillMsg] = useState('');
   const [stripe, setStripe] = useState({ connected: false, ready: false, configured: true });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -104,6 +112,32 @@ export default function Dashboard() {
   const loadStaff = async () => { const j = await getJson('/api/site/staff'); if (j.ok) setStaff({ staff: j.staff, shifts: j.shifts }); };
   const loadAnalytics = async () => { const j = await getJson('/api/site/analytics'); if (j.ok) setAnalytics(j.data || null); };
   const loadGrowth = async () => { const j = await getJson('/api/site/growth'); if (j.ok) setGrowth(j.data || null); };
+  const loadPay = async () => { const j = await getJson('/api/site/pay-setup'); if (j.ok) setPayInfo(j); };
+  const loadBilling = async () => { const j = await getJson('/api/billing'); if (j.ok) setBilling(j); };
+  const chooseProvider = async (provider) => {
+    setPayForm({ provider, bankCode: '', accountNumber: '', accountName: '', busy: true, msg: '', ok: false });
+    setBanks([]);
+    const j = await getJson(`/api/site/pay-setup?provider=${provider}&banks=1`);
+    if (j.ok) { setBanks(j.banks || []); setPayForm((f) => ({ ...f, busy: false })); }
+    else setPayForm((f) => ({ ...f, busy: false, msg: j.error || 'Could not load banks' }));
+  };
+  const verifyAccount = async () => {
+    setPayForm((f) => ({ ...f, busy: true, msg: '', accountName: '' }));
+    const j = await sendJson('/api/site/pay-setup', 'POST', { provider: payForm.provider, bankCode: payForm.bankCode, accountNumber: payForm.accountNumber });
+    setPayForm((f) => ({ ...f, busy: false, accountName: j.accountName || '', ok: !!j.accountName, msg: j.accountName ? '' : 'Could not confirm the account name automatically. You can still save if the details are right.' }));
+  };
+  const savePayout = async () => {
+    setPayForm((f) => ({ ...f, busy: true, msg: '' }));
+    const j = await sendJson('/api/site/pay-setup', 'PUT', { provider: payForm.provider, bankCode: payForm.bankCode, accountNumber: payForm.accountNumber });
+    if (j.ok) { setPayForm({ provider: '', bankCode: '', accountNumber: '', accountName: '', busy: false, msg: '', ok: false }); loadPay(); }
+    else setPayForm((f) => ({ ...f, busy: false, ok: false, msg: j.error || 'Could not save' }));
+  };
+  const turnOffCards = async () => { await sendJson('/api/site/pay-setup', 'DELETE', {}); loadPay(); };
+  const startPlan = async (plan) => {
+    setBillMsg('Opening payment page…');
+    const j = await sendJson('/api/billing', 'POST', { plan, cycle });
+    if (j.ok && j.url) window.location.href = j.url; else setBillMsg(j.error || 'Could not start payment');
+  };
   const loadStripe = async () => { const j = await getJson('/api/site/stripe'); if (j.ok) setStripe({ connected: j.connected, ready: j.ready, configured: j.configured }); };
 
   useEffect(() => {
@@ -116,8 +150,15 @@ export default function Dashboard() {
         const [b, o] = await Promise.all([getJson('/api/site/bookings'), getJson('/api/site/orders')]);
         if (b.ok) setBookings(b.data || []);
         if (o.ok) setOrders(o.data || []);
-        if (j.data) { loadStaff(); loadStripe(); loadAnalytics(); loadGrowth(); }
-        if (new URLSearchParams(window.location.search).get('stripe') === 'done') setTab('payments');
+        if (j.data) { loadStaff(); loadStripe(); loadAnalytics(); loadGrowth(); loadPay(); }
+        loadBilling();
+        const qs = new URLSearchParams(window.location.search);
+        if (qs.get('stripe') === 'done') setTab('payments');
+        if (qs.get('tab') === 'billing') {
+          setTab('billing');
+          if (qs.get('plan') === 'done') setBillMsg('Payment received. Your plan updates within a minute.');
+          if (qs.get('plan') === 'failed') setBillMsg('We could not confirm that payment. If you were charged, contact support.');
+        }
       } catch {}
       setLoading(false);
     })();
@@ -199,7 +240,7 @@ export default function Dashboard() {
   };
 
   const connectStripe = async () => {
-    const j = await sendJson('/api/site/stripe', 'POST', {});
+    const j = await sendJson('/api/site/stripe', 'POST', { country: stripeCountry });
     if (j.ok && j.url) window.location.href = j.url; else setMsg(j.error || 'Could not start Stripe setup');
   };
 
@@ -506,19 +547,100 @@ export default function Dashboard() {
             </div>
           </>)}
 
-          {tab === 'payments' && (!slug ? needSave : <div style={box}>
-            <strong>Get paid by card</strong>
-            <p style={{ fontSize: 14, color: '#374151' }}>Connect your bank account through Stripe, our payment partner. You enter your sort code and account number on Stripe's own secure page, so we never see or store them. Customer card payments for your products then go straight to your bank.</p>
-            {!stripe.configured && <p style={{ fontSize: 13, color: '#dc2626' }}>Card payments are not switched on for the platform yet.</p>}
-            {stripe.ready ? (
-              <div style={{ color: '#059669', fontWeight: 600 }}>Payouts connected ✓ Card payments are live on your shop.</div>
-            ) : (<>
-              {stripe.connected && <p style={{ fontSize: 13, color: '#d97706' }}>Setup started but not finished. Continue to finish verification.</p>}
-              <button style={btn('#2563eb')} onClick={connectStripe} disabled={!stripe.configured}>{stripe.connected ? 'Continue Stripe setup' : 'Connect payouts with Stripe'}</button>
-              <button style={{ ...btn('#6b7280'), marginLeft: 8 }} onClick={loadStripe}>Refresh status</button>
+          {tab === 'payments' && (!slug ? needSave : <>
+            <div style={box}>
+              <strong>Get paid by card</strong>
+              <p style={{ fontSize: 14, color: '#374151' }}>Your shop currency is <b>{cur}</b>. Change it on the Design tab under Region and tax. We never see or store your bank or card details, the payment partner does.</p>
+              {payInfo?.active && (
+                <div style={{ color: '#059669', fontWeight: 600 }}>
+                  Card payments are live through {payInfo.active === 'paystack' ? 'Paystack' : 'Flutterwave'} ✓
+                  <button style={{ ...sm('#6b7280'), marginLeft: 10 }} onClick={turnOffCards}>Turn off</button>
+                </div>
+              )}
+            </div>
+
+            {payInfo?.africa ? (
+              (payInfo.paystack.configured || payInfo.flutterwave.configured) ? (
+                <div style={box}>
+                  <strong>Connect your bank account</strong>
+                  <p style={{ fontSize: 13, color: '#6b7280' }}>Customer payments go to your bank, minus a small platform fee and the provider's charges.</p>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                    {payInfo.paystack.configured && <button style={btn(payForm.provider === 'paystack' ? '#111827' : '#6b7280')} onClick={() => chooseProvider('paystack')}>Use Paystack</button>}
+                    {payInfo.flutterwave.configured && <button style={btn(payForm.provider === 'flutterwave' ? '#111827' : '#6b7280')} onClick={() => chooseProvider('flutterwave')}>Use Flutterwave</button>}
+                  </div>
+                  {payForm.provider && (<>
+                    <span style={lbl}>Bank</span>
+                    <select style={inp} value={payForm.bankCode} onChange={(e) => setPayForm({ ...payForm, bankCode: e.target.value, accountName: '', ok: false })}>
+                      <option value="">{payForm.busy && !banks.length ? 'Loading banks…' : 'Choose your bank'}</option>
+                      {banks.map((bk) => (<option key={bk.code} value={bk.code}>{bk.name}</option>))}
+                    </select>
+                    <span style={lbl}>Account number</span>
+                    <input style={inp} inputMode="numeric" value={payForm.accountNumber} onChange={(e) => setPayForm({ ...payForm, accountNumber: e.target.value.replace(/\D/g, ''), accountName: '', ok: false })} />
+                    {payForm.accountName && <div style={{ fontSize: 14, color: '#059669', marginBottom: 8 }}>Account name: <b>{payForm.accountName}</b></div>}
+                    <button style={btn('#374151')} disabled={payForm.busy || !payForm.bankCode || payForm.accountNumber.length < 6} onClick={verifyAccount}>Check account name</button>
+                    <button style={{ ...btn('#2563eb'), marginLeft: 8 }} disabled={payForm.busy || !payForm.bankCode || payForm.accountNumber.length < 6} onClick={savePayout}>Save and switch on card payments</button>
+                    {payForm.msg && <div style={{ fontSize: 13, color: '#dc2626', marginTop: 8 }}>{payForm.msg}</div>}
+                  </>)}
+                </div>
+              ) : (
+                <div style={box}><span style={{ fontSize: 14 }}>Card payments in {cur} are not switched on for the platform yet. Customers can still order and pay you in person.</span></div>
+              )
+            ) : (
+              <div style={box}>
+                <strong>Connect payouts with Stripe</strong>
+                <p style={{ fontSize: 14, color: '#374151' }}>You enter your bank details on Stripe's own secure page. Customer card payments for your products then go straight to your bank.</p>
+                {!stripe.configured && <p style={{ fontSize: 13, color: '#dc2626' }}>Card payments are not switched on for the platform yet.</p>}
+                {stripe.ready ? (
+                  <div style={{ color: '#059669', fontWeight: 600 }}>Payouts connected ✓ Card payments are live on your shop.</div>
+                ) : (<>
+                  {stripe.connected && <p style={{ fontSize: 13, color: '#d97706' }}>Setup started but not finished. Continue to finish verification.</p>}
+                  {!stripe.connected && (<>
+                    <span style={lbl}>Country of your business</span>
+                    <select style={inp} value={stripeCountry} onChange={(e) => setStripeCountry(e.target.value)}>
+                      {[['GB', 'United Kingdom'], ['IE', 'Ireland'], ['FR', 'France'], ['DE', 'Germany'], ['ES', 'Spain'], ['IT', 'Italy'], ['NL', 'Netherlands'], ['BE', 'Belgium'], ['PT', 'Portugal'], ['AT', 'Austria'], ['US', 'United States'], ['CA', 'Canada'], ['AU', 'Australia']].map(([c, n]) => (<option key={c} value={c}>{n}</option>))}
+                    </select>
+                  </>)}
+                  <button style={btn('#2563eb')} onClick={connectStripe} disabled={!stripe.configured}>{stripe.connected ? 'Continue Stripe setup' : 'Connect payouts with Stripe'}</button>
+                  <button style={{ ...btn('#6b7280'), marginLeft: 8 }} onClick={loadStripe}>Refresh status</button>
+                </>)}
+              </div>
+            )}
+            <p style={{ fontSize: 12, color: '#6b7280' }}>Until payouts are connected, customers can still place orders and pay you in person.</p>
+          </>)}
+
+          {tab === 'billing' && (<>
+            {billMsg && <div style={{ ...box, color: '#374151' }}>{billMsg}</div>}
+            {!billing ? <div style={box}>Loading…</div> : (<>
+              <div style={box}>
+                <strong>Your plan</strong>
+                <div style={{ fontSize: 15, marginTop: 6 }}>
+                  {billing.current?.active
+                    ? <>{billing.current.plan === 'biz' ? 'Business' : 'Professional'} ({billing.current.cycle}) · {billing.current.status} · renews or ends {new Date(billing.current.expires_at).toLocaleDateString()}</>
+                    : 'Starter (free)'}
+                </div>
+              </div>
+              <div style={box}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button style={btn(cycle === 'monthly' ? '#111827' : '#6b7280')} onClick={() => setCycle('monthly')}>Monthly</button>
+                  <button style={btn(cycle === 'yearly' ? '#111827' : '#6b7280')} onClick={() => setCycle('yearly')}>Yearly (save 20%)</button>
+                  <span style={{ fontSize: 12, color: '#6b7280' }}>Prices for {billing.regionName} in {billing.currency}</span>
+                </div>
+                {[['pro', 'Professional', 'Website builder, online booking and calendar, priority in local search'], ['biz', 'Business', 'Everything in Professional, up to 10 staff, multiple locations, priority support']].map(([key, name, blurb]) => {
+                  const p = billing.prices[key][cycle];
+                  const f = (n) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: billing.currency, maximumFractionDigits: 0 }).format(n); } catch { return `${billing.currency} ${n}`; } };
+                  return (
+                    <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontWeight: 700 }}><span>{name}</span><span>{f(p.perMonth)}/month</span></div>
+                      <div style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 10px' }}>{blurb}{cycle === 'yearly' ? ` · billed ${f(p.amount)} once a year` : ''}</div>
+                      <button style={btn('#2563eb')} disabled={!billing.provider} onClick={() => startPlan(key)}>Choose {name}</button>
+                    </div>
+                  );
+                })}
+                {!billing.provider && <div style={{ fontSize: 13, color: '#dc2626' }}>Card payments for plans are not switched on for your region yet.</div>}
+                {billing.provider && ['paystack', 'flutterwave'].includes(billing.provider) && <div style={{ fontSize: 12, color: '#6b7280' }}>In your region plans are paid for one period at a time. We remind you before your plan ends.</div>}
+              </div>
             </>)}
-            <p style={{ fontSize: 12, color: '#6b7280', marginTop: 14 }}>Until payouts are connected, customers can still place orders and pay you in person.</p>
-          </div>)}
+          </>)}
         </div>
 
         <div style={{ flex: '1 1 420px', minWidth: 0 }}>
