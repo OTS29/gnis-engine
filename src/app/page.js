@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { gsap } from 'gsap';
 import { login, signup, logout } from './auth/action';
+import { REGIONS, REGION_ORDER, AFRICA, ID_METHODS, regionFor, guessRegion, money, symbolOf, scalePrice, planPrices } from '@/lib/regions';
 
 // Set to true after you add public/demo.mp4
 const SHOW_VIDEO = false;
@@ -86,9 +87,14 @@ export default function LandingPage() {
   const [regPassword, setRegPassword] = useState('');
   const [regPostcode, setRegPostcode] = useState('');
   const [regAddress, setRegAddress] = useState('');
-  const [regRate, setRegRate] = useState('£25');
+  const [regRate, setRegRate] = useState('');
 
-  const [targetRegion, setTargetRegion] = useState('UK');
+  // Region: detected from the visitor's country, changeable from the menu. Decides currency, prices and sign-up fields.
+  const [region, setRegion] = useState('GB');
+  const targetRegion = AFRICA.includes(region) ? 'NG' : 'UK';
+  const sym = symbolOf(region);
+  const fmt = (n) => money(n, region);
+  const idOptions = ID_METHODS[region] || [];
   const [verificationMethod, setVerificationMethod] = useState('nin');
   const [idNumberInput, setIdNumberInput] = useState('');
 
@@ -105,6 +111,30 @@ export default function LandingPage() {
     });
     return () => ctx.revert();
   }, []);
+
+  // Pick the region: saved choice first, then the visitor's country from the server, then a browser guess.
+  useEffect(() => {
+    let saved = null;
+    try { saved = localStorage.getItem('gnis_region'); } catch {}
+    if (saved && REGIONS[saved]) { setRegion(saved); return; }
+    fetch('/api/geo')
+      .then(r => r.json())
+      .then(j => setRegion(regionFor(j?.country) || guessRegion()))
+      .catch(() => setRegion(guessRegion()));
+  }, []);
+
+  const changeRegion = (code) => {
+    if (!REGIONS[code]) return;
+    setRegion(code);
+    try { localStorage.setItem('gnis_region', code); } catch {}
+  };
+
+  // When the region changes: reset the sample prices and the default ID type.
+  useEffect(() => {
+    setAiSelectedServices([]);
+    setServices(list => (list.length === 1 && list[0].id === 1 ? [{ ...list[0], price: scalePrice(30, region) }] : list));
+    setVerificationMethod((ID_METHODS[region] || [['nin']])[0][0]);
+  }, [region]);
 
   useEffect(() => {
     const t = setInterval(() => setActiveReviewIndex((p) => (p + 1) % realUserReviews.length), 4000);
@@ -167,10 +197,11 @@ export default function LandingPage() {
       formData.append('name', regName);
       formData.append('role', registrationType.toLowerCase());
       formData.append('region', targetRegion);
+      formData.append('country', region);
 
       if (registrationType === 'pro') {
         formData.append('skill', regSkill);
-        formData.append('rate', regRate);
+        formData.append('rate', /^\d/.test(String(regRate).trim()) ? `${sym}${String(regRate).trim()}` : regRate);
       }
       if (targetRegion === 'UK') {
         formData.append('address', regAddress);
@@ -184,14 +215,15 @@ export default function LandingPage() {
       if (result?.error) throw new Error(result.error);
 
       if (registrationType === 'pro') {
-        const rate = String(regRate || '£25');
+        const rawRate = String(regRate || '').trim();
+        const rate = /^\d/.test(rawRate) ? `${sym}${rawRate}` : rawRate;
         setAllPros([{
           id: `new-${Date.now()}`,
           name: regName || 'New Professional',
           skill: regSkill || 'General Provider',
           category: regCategory,
-          area: targetRegion === 'UK' ? regPostcode.toUpperCase() : 'NG',
-          rate: rate.startsWith('£') ? rate : `£${rate}`,
+          area: targetRegion === 'UK' ? regPostcode.toUpperCase() : region,
+          rate,
           availability: 'Immediate'
         }, ...allPros]);
       }
@@ -298,6 +330,10 @@ export default function LandingPage() {
               )}
             </div>
 
+            <select value={region} onChange={(e) => changeRegion(e.target.value)} aria-label="Country and currency" className="hidden md:block bg-transparent border border-gray-200 dark:border-slate-800 rounded-xl px-2 py-2 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-300 max-w-[120px]">
+              {REGION_ORDER.map(k => (<option key={k} value={k} className="text-black">{REGIONS[k].flag} {REGIONS[k].name} ({REGIONS[k].currency})</option>))}
+            </select>
+
             <button onClick={() => setIsDarkMode(!isDarkMode)} aria-label="Toggle theme" className="p-2 rounded-xl border border-gray-200 dark:border-slate-800 text-xs">
               {isDarkMode ? '☀️' : '🌙'}
             </button>
@@ -314,6 +350,9 @@ export default function LandingPage() {
             <a href="#services-matrix" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">Builder</a>
             <a href="#marketplace-feed" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">Marketplace</a>
             <a href="#pricing" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">Pricing</a>
+            <select value={region} onChange={(e) => changeRegion(e.target.value)} aria-label="Country and currency" className="block w-full mt-2 mb-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-white">
+              {REGION_ORDER.map(k => (<option key={k} value={k}>{REGIONS[k].flag} {REGIONS[k].name} ({REGIONS[k].currency})</option>))}
+            </select>
             {!currentUser && (
               <button onClick={() => openRegister('pro')} className="block w-full text-left text-xs font-black uppercase tracking-widest py-2.5 text-green-400">Register as Pro</button>
             )}
@@ -393,7 +432,7 @@ export default function LandingPage() {
               <h2 className="text-3xl sm:text-4xl font-black italic uppercase tracking-tighter">✨ Website builder</h2>
             </div>
             <p className="text-xs text-slate-400 max-w-xs font-medium uppercase tracking-wider md:text-right">
-              Pick your industry and services to preview your price list.
+              Pick your industry and services to preview your price list. Sample prices shown in your local currency.
             </p>
           </div>
 
@@ -412,10 +451,10 @@ export default function LandingPage() {
                   {SERVICE_PRESETS[aiCategory].map(s => (
                     <button
                       key={s.name}
-                      onClick={() => toggleAiService(s.name, s.price)}
+                      onClick={() => toggleAiService(s.name, scalePrice(s.price, region))}
                       className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${aiSelectedServices.find(x => x.name === s.name) ? 'bg-green-600 text-white border border-green-500' : 'bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700'}`}
                     >
-                      {s.name} · £{s.price}
+                      {s.name} · {fmt(scalePrice(s.price, region))}
                     </button>
                   ))}
                 </div>
@@ -449,7 +488,7 @@ export default function LandingPage() {
                         onChange={(e) => updateService(s.id, 'name', e.target.value)}
                       />
                       <div className="flex items-center bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-                        <span className="text-xs font-bold text-slate-500 mr-1">£</span>
+                        <span className="text-xs font-bold text-slate-500 mr-1">{sym}</span>
                         <input
                           type="number"
                           className="bg-transparent w-14 text-sm focus:outline-none font-black text-green-400"
@@ -584,7 +623,7 @@ export default function LandingPage() {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
-              { i: '🛡️', t: 'Privacy by design', d: 'We collect only what we need and never sell your data. Privacy policy coming before launch.' },
+              { i: '🛡️', t: 'Privacy by design', d: 'We collect only what we need and never sell your data. Read our privacy policy and terms.' },
               { i: '🔑', t: 'Secure sign-in', d: 'Passwords are hashed and sessions use secure, HTTP-only cookies.' },
               { i: '✅', t: 'Identity checks', d: 'Optional identity verification for professionals, rolling out in stages.' }
             ].map(x => (
@@ -619,11 +658,13 @@ export default function LandingPage() {
             </span>
           </div>
 
+          <p className="text-center text-[11px] text-slate-500 -mt-6 mb-8">Prices shown in {REGIONS[region].currency} for {REGIONS[region].name}. Change country from the menu at the top.</p>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
             <div className="p-8 rounded-3xl border border-slate-800 bg-slate-900/40 flex flex-col">
               <h3 className="text-sm font-bold text-slate-300">Starter</h3>
               <div className="mt-4 mb-1 flex items-baseline gap-1">
-                <span className="text-4xl font-black text-white">£0</span>
+                <span className="text-4xl font-black text-white">{fmt(0)}</span>
                 <span className="text-sm text-slate-400">/month</span>
               </div>
               <p className="text-xs text-slate-500 mb-6 h-4"></p>
@@ -639,10 +680,10 @@ export default function LandingPage() {
               <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Most popular</span>
               <h3 className="text-sm font-bold text-green-400">Professional</h3>
               <div className="mt-4 mb-1 flex items-baseline gap-1">
-                <span className="text-4xl font-black text-white">{billingCycle === 'monthly' ? '£12' : '£10'}</span>
+                <span className="text-4xl font-black text-white">{fmt(planPrices(region, billingCycle).pro.perMonth)}</span>
                 <span className="text-sm text-slate-400">/month</span>
               </div>
-              <p className="text-xs text-slate-500 mb-6 h-4">{billingCycle === 'yearly' ? 'Billed £115 yearly' : ''}</p>
+              <p className="text-xs text-slate-500 mb-6 h-4">{billingCycle === 'yearly' ? `Billed ${fmt(planPrices(region, 'yearly').pro.billedYearly)} yearly` : ''}</p>
               <ul className="text-sm text-slate-300 space-y-3 mb-8 flex-1">
                 <li>✓ Everything in Starter</li>
                 <li>✓ Website builder</li>
@@ -655,10 +696,10 @@ export default function LandingPage() {
             <div className="p-8 rounded-3xl border border-slate-800 bg-slate-900/40 flex flex-col">
               <h3 className="text-sm font-bold text-slate-300">Business</h3>
               <div className="mt-4 mb-1 flex items-baseline gap-1">
-                <span className="text-4xl font-black text-white">{billingCycle === 'monthly' ? '£29' : '£23'}</span>
+                <span className="text-4xl font-black text-white">{fmt(planPrices(region, billingCycle).biz.perMonth)}</span>
                 <span className="text-sm text-slate-400">/month</span>
               </div>
-              <p className="text-xs text-slate-500 mb-6 h-4">{billingCycle === 'yearly' ? 'Billed £278 yearly' : ''}</p>
+              <p className="text-xs text-slate-500 mb-6 h-4">{billingCycle === 'yearly' ? `Billed ${fmt(planPrices(region, 'yearly').biz.billedYearly)} yearly` : ''}</p>
               <ul className="text-sm text-slate-300 space-y-3 mb-8 flex-1">
                 <li>✓ Everything in Professional</li>
                 <li>✓ Up to 10 staff profiles</li>
@@ -710,8 +751,8 @@ export default function LandingPage() {
             © 2026 {businessName} • London
           </div>
           <div className="flex gap-6 text-slate-500 text-[10px] font-black uppercase tracking-widest">
-            <a href="#" className="hover:text-white">Privacy</a>
-            <a href="#" className="hover:text-white">Terms</a>
+            <a href="/privacy" className="hover:text-white">Privacy</a>
+            <a href="/terms" className="hover:text-white">Terms</a>
           </div>
         </div>
       </footer>
@@ -767,11 +808,10 @@ export default function LandingPage() {
                 </div>
 
                 <div className="mb-4">
-                  <label className="block text-[9px] font-mono font-black text-slate-500 uppercase tracking-widest mb-1.5">Region</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => setTargetRegion('UK')} className={`py-2 text-xs font-bold rounded-xl border ${targetRegion === 'UK' ? 'border-green-500 bg-green-500/10 text-white' : 'border-slate-800 bg-slate-950 text-slate-400'}`}>United Kingdom</button>
-                    <button type="button" onClick={() => setTargetRegion('NG')} className={`py-2 text-xs font-bold rounded-xl border ${targetRegion === 'NG' ? 'border-green-500 bg-green-500/10 text-white' : 'border-slate-800 bg-slate-950 text-slate-400'}`}>Nigeria / Africa</button>
-                  </div>
+                  <label className="block text-[9px] font-mono font-black text-slate-500 uppercase tracking-widest mb-1.5">Country</label>
+                  <select value={region} onChange={(e) => changeRegion(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                    {REGION_ORDER.map(k => (<option key={k} value={k}>{REGIONS[k].flag} {REGIONS[k].name} ({REGIONS[k].currency})</option>))}
+                  </select>
                 </div>
 
                 <form onSubmit={handleRegistrationSubmit} className="space-y-4">
@@ -787,7 +827,7 @@ export default function LandingPage() {
                       </select>
                       <div className="grid grid-cols-2 gap-3">
                         <input type="text" placeholder="Your skill (e.g. Photographer)" required value={regSkill} onChange={(e) => setRegSkill(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
-                        <input type="text" placeholder="Rate" required value={regRate} onChange={(e) => setRegRate(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
+                        <input type="text" placeholder={`Rate (e.g. ${sym}${scalePrice(25, region)})`} required value={regRate} onChange={(e) => setRegRate(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" />
                       </div>
                     </>
                   )}
@@ -798,18 +838,21 @@ export default function LandingPage() {
                   {targetRegion === 'UK' ? (
                     <div className="grid grid-cols-3 gap-3">
                       <input type="text" placeholder="Address" className="col-span-2 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white" value={regAddress} onChange={(e) => setRegAddress(e.target.value)} />
-                      <input type="text" placeholder="Postcode" className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white uppercase" value={regPostcode} onChange={(e) => setRegPostcode(e.target.value)} />
+                      <input type="text" placeholder="Postcode / ZIP" className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white uppercase" value={regPostcode} onChange={(e) => setRegPostcode(e.target.value)} />
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => setVerificationMethod('nin')} className={`py-1.5 text-[10px] font-black uppercase rounded-lg border ${verificationMethod === 'nin' ? 'border-green-500 bg-green-500/20 text-white' : 'border-slate-800 text-slate-400'}`}>NIN</button>
-                        <button type="button" onClick={() => setVerificationMethod('bvn')} className={`py-1.5 text-[10px] font-black uppercase rounded-lg border ${verificationMethod === 'bvn' ? 'border-green-500 bg-green-500/20 text-white' : 'border-slate-800 text-slate-400'}`}>BVN</button>
-                      </div>
+                      {idOptions.length > 1 && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {idOptions.map(([key, label]) => (
+                            <button key={key} type="button" onClick={() => setVerificationMethod(key)} className={`py-1.5 text-[10px] font-black uppercase rounded-lg border ${verificationMethod === key ? 'border-green-500 bg-green-500/20 text-white' : 'border-slate-800 text-slate-400'}`}>{label}</button>
+                          ))}
+                        </div>
+                      )}
                       <input
                         type="text"
                         required
-                        placeholder={verificationMethod === 'nin' ? "11-digit National ID Number" : "11-digit Bank Verification Number"}
+                        placeholder={(idOptions.find(o => o[0] === verificationMethod) || idOptions[0] || ['', '', 'ID number'])[2]}
                         value={idNumberInput}
                         onChange={(e) => setIdNumberInput(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white font-mono tracking-widest"
