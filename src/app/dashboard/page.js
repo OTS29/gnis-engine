@@ -100,6 +100,7 @@ export default function Dashboard() {
   const [stripeCountry, setStripeCountry] = useState('GB');
   const [billing, setBilling] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [plan, setPlan] = useState('starter');
   const [cycle, setCycle] = useState('monthly');
   const [billMsg, setBillMsg] = useState('');
   const [stripe, setStripe] = useState({ connected: false, ready: false, configured: true });
@@ -152,6 +153,7 @@ export default function Dashboard() {
         const r = await fetch('/api/site');
         if (r.status === 401) { window.location.href = '/'; return; }
         const j = await r.json();
+        if (j.plan) setPlan(j.plan);
         if (j.data) { setTemplate(j.data.template || 'classic'); setData(mergeData(j.data.data)); setSlug(j.data.slug); }
         const [b, o] = await Promise.all([getJson('/api/site/bookings'), getJson('/api/site/orders')]);
         if (b.ok) setBookings(b.data || []);
@@ -175,6 +177,20 @@ export default function Dashboard() {
 
   const cur = data.currency || 'GBP';
   const sym = (formatMoney(0, cur, data.language || 'en').replace(/[0-9.,\s]/g, '')) || cur;
+  const CC = { GBP: '44', NGN: '234', GHS: '233', KES: '254', ZAR: '27', USD: '1', CAD: '1', AUD: '61', EUR: '353' };
+  const waLink = (b) => {
+    const raw = String(b.contact || '');
+    if (raw.includes('@')) return null;
+    let d = raw.replace(/[^\d+]/g, '');
+    if (d.startsWith('+')) d = d.slice(1);
+    else if (d.startsWith('00')) d = d.slice(2);
+    else if (d.startsWith('0')) d = (CC[cur] || '44') + d.slice(1);
+    if (!/^\d{10,15}$/.test(d)) return null;
+    const text = b.status === 'approved'
+      ? `Hi ${b.customer}, a reminder of your ${b.service} booking with ${data.businessName} on ${b.date} at ${b.time}. See you then!`
+      : `Hi ${b.customer}, thanks for booking ${b.service} with ${data.businessName} on ${b.date} at ${b.time}. Does that time still suit you?`;
+    return `https://wa.me/${d}?text=${encodeURIComponent(text)}`;
+  };
   const fm = (n) => formatMoney(Math.round((Number(n) || 0) * 100) / 100, cur, data.language || 'en');
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }));
   const setItem = (k, i, patch) => setData((d) => ({ ...d, [k]: d[k].map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
@@ -356,6 +372,20 @@ export default function Dashboard() {
               <span style={lbl}>VAT / tax number (shown in your footer, optional)</span>
               <input style={inp} value={data.vatNumber || ''} onChange={(e) => set('vatNumber', e.target.value)} />
             </div>
+            <div style={box}>
+              <strong>Deposits and WhatsApp</strong>
+              {plan === 'starter' && (
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>These are Professional plan features. <button type="button" style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0, fontSize: 12, textDecoration: 'underline' }} onClick={() => setTab('billing')}>See plans</button></p>
+              )}
+              <span style={lbl}>Booking deposit (paid by the customer when they book). Needs card payments connected in the Payments tab</span>
+              <select style={inp} disabled={plan === 'starter'} value={Number(data.depositPercent) || 0} onChange={(e) => set('depositPercent', Number(e.target.value))}>
+                {[0, 10, 20, 25, 30, 50, 100].map((p) => (<option key={p} value={p}>{p === 0 ? 'No deposit' : `${p}% deposit`}</option>))}
+              </select>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, marginBottom: 4, opacity: plan === 'starter' ? 0.5 : 1 }}>
+                <input type="checkbox" disabled={plan === 'starter'} checked={!!data.whatsappReminders} onChange={(e) => set('whatsappReminders', e.target.checked)} /> Send confirmations and reminders on WhatsApp automatically
+              </label>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '0' }}>Automatic WhatsApp needs a Twilio WhatsApp number set up by the platform owner. On every plan you can message a customer yourself with the WhatsApp button on the Bookings tab.</p>
+            </div>
           </>)}
 
           {tab === 'services' && (<>
@@ -466,6 +496,8 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span style={pill(b.status)}>{String(b.status).replace('_', ' ')}</span>
                   {b.risk && <span title={b.risk.reasons.join(', ')} style={{ fontSize: 11, fontWeight: 700, color: RISK_COLOR[b.risk.label], border: `1px solid ${RISK_COLOR[b.risk.label]}`, padding: '1px 8px', borderRadius: 999 }}>No-show risk: {b.risk.label} ({Math.round(b.risk.p * 100)}%)</span>}
+                  {b.deposit_amount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: b.deposit_paid ? '#059669' : '#d97706', border: `1px solid ${b.deposit_paid ? '#059669' : '#d97706'}`, padding: '1px 8px', borderRadius: 999 }}>{b.deposit_paid ? `Deposit paid ${fm(b.deposit_amount)}` : `Deposit unpaid ${fm(b.deposit_amount)}`}</span>}
+                  {waLink(b) && <a href={waLink(b)} target="_blank" rel="noreferrer" style={{ ...sm('#25d366'), textDecoration: 'none' }}>WhatsApp</a>}
                   {BOOKING_STATUSES.filter((s) => s !== b.status).map((s) => (<button key={s} style={sm(STATUS_COLOR[s])} onClick={() => setBookingStatus(b.id, s)}>{s.replace('_', ' ')}</button>))}
                 </div>
               </div>
@@ -626,7 +658,7 @@ export default function Dashboard() {
                 <div style={{ fontSize: 15, marginTop: 6 }}>
                   {billing.current?.active
                     ? <>{billing.current.plan === 'biz' ? 'Business' : 'Professional'} ({billing.current.cycle}) · {billing.current.status} · renews or ends {new Date(billing.current.expires_at).toLocaleDateString()}</>
-                    : 'Starter (free)'}
+                    : 'Starter (free): up to 8 services, 6 photos and 2 staff, with a small GNIS badge on your site'}
                 </div>
               </div>
               <div style={box}>
@@ -641,7 +673,7 @@ export default function Dashboard() {
                   </select>
                   <span style={{ fontSize: 12, color: '#6b7280' }}>Prices in {billing.currency}</span>
                 </div>
-                {[['pro', 'Professional', 'Website builder, online booking and calendar, priority in local search'], ['biz', 'Business', 'Everything in Professional, up to 10 staff, multiple locations, priority support']].map(([key, name, blurb]) => {
+                {[['pro', 'Professional', 'Booking deposits, automatic WhatsApp reminders, up to 30 services and 12 photos, no GNIS badge, up to 5 staff'], ['biz', 'Business', 'Everything in Professional, up to 10 staff, priority support']].map(([key, name, blurb]) => {
                   const p = billing.prices[key][cycle];
                   const f = (n) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: billing.currency, maximumFractionDigits: 0 }).format(n); } catch { return `${billing.currency} ${n}`; } };
                   return (
@@ -662,7 +694,7 @@ export default function Dashboard() {
         <div style={{ flex: '1 1 420px', minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>LIVE PREVIEW</div>
           <div style={{ border: '1px solid #d1d5db', borderRadius: 12, overflow: 'hidden', maxHeight: '80vh', overflowY: 'auto', background: '#fff' }}>
-            <SiteRenderer slug={slug || ''} template={template} data={data} preview payOnline={stripe.ready} />
+            <SiteRenderer slug={slug || ''} template={template} data={data} preview payOnline={stripe.ready} showBadge={plan === 'starter'} />
           </div>
         </div>
       </div>

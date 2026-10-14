@@ -55,6 +55,7 @@ export default function Admin() {
   const [note, setNote] = useState('');
   const [msg, setMsg] = useState('');
   const [del, setDel] = useState('');
+  const [planSel, setPlanSel] = useState({ plan: 'pro', months: 1 });
   const [add, setAdd] = useState({ email: '', name: '', role: 'client', country: '', skill: '', password: '' });
 
   const load = async () => {
@@ -213,6 +214,12 @@ export default function Admin() {
                           <div style={{ fontWeight: 700, marginBottom: 6 }}>Private note</div>
                           <textarea style={{ ...input, minHeight: 70 }} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Only admins can see this" />
                           <button style={{ ...btn('#374151'), marginTop: 6 }} onClick={() => act(u, { action: 'note', note }, 'Note saved.')}>Save note</button>
+                          <div style={{ fontWeight: 700, margin: '14px 0 6px' }}>Give a plan <span style={{ fontWeight: 400, color: '#6b7280', fontSize: 12 }}>(now: {u.plan_active ? (u.plan === 'biz' ? 'Business' : 'Professional') : 'Starter'})</span></div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <select style={input} value={planSel.plan} onChange={(e) => setPlanSel({ ...planSel, plan: e.target.value })}><option value="pro">Professional</option><option value="biz">Business</option><option value="starter">Back to Starter</option></select>
+                            <select style={input} value={planSel.months} onChange={(e) => setPlanSel({ ...planSel, months: e.target.value })}><option value="1">1 month</option><option value="3">3 months</option><option value="12">12 months</option></select>
+                          </div>
+                          <button style={{ ...btn('#7c3aed'), marginTop: 6 }} onClick={() => act(u, { action: 'plan', ...planSel }, 'Plan updated.')}>Apply plan</button>
                           <div style={{ fontWeight: 700, margin: '14px 0 6px' }}>Role</div>
                           <select style={input} value={u.role} onChange={(e) => act(u, { action: 'role', role: e.target.value }, 'Role changed. They need to log in again.')}>
                             <option value="pro">Professional</option><option value="client">Client</option><option value="admin">Admin</option>

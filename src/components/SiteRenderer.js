@@ -31,7 +31,7 @@ function useCountUp(target, run) {
   return v;
 }
 
-export default function SiteRenderer({ slug, template = 'classic', data, preview = false, payOnline = false, bookingCount = 0 }) {
+export default function SiteRenderer({ slug, template = 'classic', data, preview = false, payOnline = false, bookingCount = 0, showBadge = false }) {
   const t = T[template] || T.classic;
   const a = data.accent || '#2563eb';
   const root = useRef(null);
@@ -57,12 +57,15 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
   const [buyer, setBuyer] = useState({ customer: '', contact: '' });
   const [shop, setShop] = useState({ busy: false, msg: '', ok: false });
   const [paidBanner, setPaidBanner] = useState(false);
+  const [depositBanner, setDepositBanner] = useState('');
 
   const count = useCountUp(bookingCount, ready);
 
   useEffect(() => {
     setReady(true);
     if (new URLSearchParams(window.location.search).get('paid') === '1') setPaidBanner(true);
+    const dp = new URLSearchParams(window.location.search).get('deposit');
+    if (dp === '1' || dp === '0') setDepositBanner(dp === '1' ? 'ok' : 'fail');
   }, []);
 
   // scroll-reveal animations (content stays visible if JS is unavailable)
@@ -145,6 +148,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
     try {
       const r = await fetch('/api/site/book', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, ...form, lockToken: locked?.token }) });
       const j = await r.json();
+      if (j.ok && j.payUrl) { window.location.href = j.payUrl; return; }
       if (j.ok) {
         setState({ busy: false, ok: true, msg: L('sentOk', { amt: money(j.price) }) });
         setForm({ customer: '', contact: '', service: '', date: '', time: '' });
@@ -263,6 +267,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
     <div ref={root} className="sr-root" style={{ background: t.bg, color: t.fg, fontFamily: t.font, lineHeight: 1.6, minHeight: '100%' }}>
       <style>{css}</style>
 
+      {depositBanner && <div style={{ background: depositBanner === 'ok' ? '#059669' : '#d97706', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L(depositBanner === 'ok' ? 'depositOk' : 'depositFail')}</div>}
       {paidBanner && <div style={{ background: '#059669', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L('paidOk')}</div>}
 
       <nav className="sr-nav" style={{ background: t.nav, color: t.navFg, boxShadow: scrolled ? '0 4px 24px rgba(0,0,0,.12)' : 'none', borderBottom: `1px solid ${scrolled ? t.line : 'transparent'}` }}>
@@ -457,6 +462,9 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
               <input className={input} type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
               <input className={input} type="time" required value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
             </div>
+            {Number(data.depositPercent) > 0 && payOnline && selected && Number(locked?.price ?? selected.price) > 0 && (
+              <div style={{ fontSize: 13, color: t.mute }}>{L('depositNote', { pct: data.depositPercent, amt: money((Number(locked?.price ?? selected.price) * Number(data.depositPercent)) / 100) })}</div>
+            )}
             <button className="sr-btn" disabled={state.busy}>{state.busy ? L('sending') : locked ? L('requestBookingAt', { amt: money(locked.price) }) : L('requestBooking')}</button>
             {state.msg && <div style={{ fontSize: 14, color: state.ok ? '#059669' : '#dc2626' }}>{state.msg}</div>}
           </form>
@@ -493,6 +501,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
             <span style={{ display: 'flex', gap: 14 }}><a href="/privacy" style={{ color: 'inherit', display: 'inline', margin: 0 }}>{L('privacy')}</a><a href="/terms" style={{ color: 'inherit', display: 'inline', margin: 0 }}>{L('terms')}</a><a href={`/clock/${slug}`} style={{ color: 'inherit', display: 'inline', margin: 0 }}>{L('staffLogin')}</a></span>
           </div>
         </div>
+        {showBadge && <div style={{ textAlign: 'center', fontSize: 12, opacity: 0.7, padding: '0 0 18px' }}><a href="/" style={{ color: 'inherit' }}>{L('builtWith')}</a></div>}
       </footer>
 
       {!preview && <CookieBanner lang={lang} accent={a} />}

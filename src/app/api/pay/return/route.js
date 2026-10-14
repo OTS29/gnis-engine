@@ -13,10 +13,16 @@ export async function GET(req) {
   const provider = u.searchParams.get('p') === 'flutterwave' ? 'flutterwave' : 'paystack';
   const orderId = parseInt(u.searchParams.get('o') || '', 10);
   const planRef = u.searchParams.get('plan') || '';
+  const depositId = parseInt(u.searchParams.get('d') || '', 10);
   try {
     if (planRef) {
       const ok = await settleAny(planRef, provider);
       return NextResponse.redirect(`${base}/dashboard?tab=billing&plan=${ok ? 'done' : 'failed'}`);
+    }
+    if (depositId) {
+      const [b] = await sql`select pay_ref from site_bookings where id = ${depositId}`;
+      const ok = b?.pay_ref ? await settleAny(b.pay_ref, provider) : false;
+      return NextResponse.redirect(`${base}/site/${slug}?deposit=${ok ? '1' : '0'}`);
     }
     if (orderId) {
       const [o] = await sql`select pay_ref from site_orders where id = ${orderId}`;

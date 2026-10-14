@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { sql } from '@/lib/db';
 import { getSession, isOwnerRole } from '@/lib/session';
 import { cleanData, TEMPLATE_LIST } from '@/lib/siteDefaults';
+import { planOfUser, limitsFor, PLAN_LABEL } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
@@ -12,9 +13,10 @@ export async function GET(req) {
     if (!isOwnerRole(session)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
 
     const [site] = await sql`select slug, template, data, stripe_account_id, stripe_ready from sites where owner_id = ${session.userId}`;
-    if (!site) return NextResponse.json({ ok: true, data: null });
+    const plan = await planOfUser(session.userId);
+    if (!site) return NextResponse.json({ ok: true, data: null, plan, limits: limitsFor(plan) });
     const { stripe_account_id, ...rest } = site;
-    return NextResponse.json({ ok: true, data: { ...rest, stripeConnected: !!stripe_account_id } });
+    return NextResponse.json({ ok: true, data: { ...rest, stripeConnected: !!stripe_account_id }, plan, limits: limitsFor(plan) });
   } catch (e) {
     console.error('SITE_GET_FAULT:', e);
     return NextResponse.json({ ok: false, error: 'Could not load site' }, { status: 500 });
@@ -35,9 +37,25 @@ export async function PUT(req) {
     const data = cleanData(body.data);
     const json = JSON.stringify(data);
 
-    const [existing] = await sql`select slug from sites where owner_id = ${session.userId}`;
+    const [existing] = await sql`select slug, data from sites where owner_id = ${session.userId}`;
+
+    // Plan limits: you can always keep what you already have, but you cannot add beyond your plan.
+    const plan = await planOfUser(session.userId);
+    const lim = limitsFor(plan);
+    const before = existing?.data || {};
+    for (const [key, label] of [['services', 'services'], ['products', 'products'], ['gallery', 'photos']]) {
+      const had = Array.isArray(before[key]) ? before[key].length : 0;
+      const now = data[key].length;
+      if (now > lim[key] && now > had) {
+        return NextResponse.json({ ok: false, upgrade: true, error: `The ${PLAN_LABEL[plan]} plan allows up to ${lim[key]} ${label}. Upgrade in the Billing tab to add more.` }, { status: 402 });
+      }
+    }
+    if (!lim.deposits) data.depositPercent = 0;
+    if (!lim.whatsappAuto) data.whatsappReminders = false;
+    const json2 = JSON.stringify(data);
+
     if (existing) {
-      await sql`update sites set template = ${template}, data = ${json}::jsonb, updated_at = now()
+      await sql`update sites set template = ${template}, data = ${json2}::jsonb, updated_at = now()
                 where owner_id = ${session.userId}`;
       revalidatePath(`/site/${existing.slug}`);
       return NextResponse.json({ ok: true, slug: existing.slug });
@@ -53,7 +71,7 @@ export async function PUT(req) {
     }
 
     await sql`insert into sites (owner_id, slug, template, data)
-              values (${session.userId}, ${slug}, ${template}, ${json}::jsonb)`;
+              values (${session.userId}, ${slug}, ${template}, ${json2}::jsonb)`;
 
     // Credit whoever referred this seller (cookie set by /r/CODE). Never blocks saving.
     try {

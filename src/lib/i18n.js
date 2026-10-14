@@ -12,7 +12,7 @@ const EN = {
   negHi: 'Hi! {service} is listed at {price}. What price did you have in mind?', offerMsg: 'I can do {amt}',
   quickLinks: 'Quick links', staffLogin: 'Staff login', rights: 'All rights reserved.', free: 'Free', inclTax: 'incl. {rate}% tax', exclTax: '+ {rate}% tax', vatNo: 'VAT no.',
   cookieText: 'We use essential cookies to make this site work. Chat widgets and other optional tools only load if you accept.', cookieAccept: 'Accept', cookieDecline: 'Decline', privacy: 'Privacy', terms: 'Terms',
-  sentOk: 'Request sent at {amt}. You will be contacted to confirm.', paidOk: 'Payment received. Thank you! The seller will be in touch.', orderOk: 'Order placed! You pay when you collect or receive it.',
+  sentOk: 'Request sent at {amt}. You will be contacted to confirm.', paidOk: 'Payment received. Thank you! The seller will be in touch.', orderOk: 'Order placed! You pay when you collect or receive it.', depositNote: 'A {pct}% deposit ({amt}) is paid now to secure your booking.', depositOk: 'Deposit received. Your booking is secured and will be confirmed shortly.', depositFail: 'We could not confirm your deposit. Your booking request was still sent, so please contact the business.', builtWith: 'Website built with GNIS',
 };
 
 const FR = {

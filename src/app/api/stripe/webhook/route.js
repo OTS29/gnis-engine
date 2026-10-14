@@ -16,6 +16,7 @@ export async function POST(req) {
 
     if (event.type === 'checkout.session.completed') {
       if (o.metadata?.order_id) await sql`update site_orders set status = 'paid' where id = ${o.metadata.order_id}`;
+      if (o.metadata?.kind === 'deposit' && o.metadata?.booking_id) await sql`update site_bookings set deposit_paid = true where id = ${o.metadata.booking_id}`;
       if (o.metadata?.kind === 'plan' && o.metadata?.ref) await settlePlan(o.metadata.ref, 'stripe', { trusted: true, subId: o.subscription || null });
     }
 

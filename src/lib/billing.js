@@ -62,4 +62,20 @@ export async function settleOrder(ref, provider) {
   return true;
 }
 
-export const settleAny = (ref, provider) => (String(ref).startsWith('gnis-p') ? settlePlan(ref, provider) : settleOrder(ref, provider));
+export async function settleDeposit(ref, provider) {
+  const [b] = await sql`select b.id, b.deposit_amount::float8 as amt, b.deposit_paid, s.data from site_bookings b join sites s on s.id = b.site_id where b.pay_ref = ${ref}`;
+  if (!b) return false;
+  if (b.deposit_paid) return true;
+  const v = await verifyPayment(provider, ref);
+  const cur = String(b.data?.currency || 'GBP').toUpperCase();
+  if (!v.paid || v.currency !== cur || v.amount + 0.01 < (b.amt || 0)) return false;
+  await sql`update site_bookings set deposit_paid = true where id = ${b.id}`;
+  return true;
+}
+
+export const settleAny = (ref, provider) => {
+  const r = String(ref);
+  if (r.startsWith('gnis-p')) return settlePlan(ref, provider);
+  if (r.startsWith('gnis-d')) return settleDeposit(ref, provider);
+  return settleOrder(ref, provider);
+};

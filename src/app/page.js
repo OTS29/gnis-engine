@@ -711,9 +711,9 @@ export default function LandingPage() {
               </div>
               <p className="text-xs text-slate-500 mb-6 h-4"></p>
               <ul className="text-sm text-slate-300 space-y-3 mb-8 flex-1">
-                <li>✓ 1 professional profile</li>
+                <li>✓ Your own booking website</li>
                 <li>✓ Marketplace listing</li>
-                <li>✓ Manual bookings</li>
+                <li>✓ Up to 8 services and 6 photos</li>
               </ul>
               <button onClick={() => openRegister('pro')} className="w-full py-3 text-xs font-black uppercase tracking-wider bg-slate-800 hover:bg-slate-700 rounded-xl text-white transition">Start free</button>
             </div>
@@ -728,9 +728,9 @@ export default function LandingPage() {
               <p className="text-xs text-slate-500 mb-6 h-4">{billingCycle === 'yearly' ? `Billed ${fmt(planPrices(region, 'yearly').pro.billedYearly)} yearly` : ''}</p>
               <ul className="text-sm text-slate-300 space-y-3 mb-8 flex-1">
                 <li>✓ Everything in Starter</li>
-                <li>✓ Website builder</li>
-                <li>✓ Online booking and calendar</li>
-                <li>✓ Priority in local search</li>
+                <li>✓ Booking deposits (fewer no-shows)</li>
+                <li>✓ Automatic WhatsApp reminders</li>
+                <li>✓ 30 services, 12 photos, no GNIS badge</li>
               </ul>
               <button onClick={choosePlan} className="w-full py-3 text-xs font-black uppercase tracking-wider bg-green-600 hover:bg-green-500 rounded-xl text-white transition">Get Professional</button>
             </div>
@@ -745,7 +745,7 @@ export default function LandingPage() {
               <ul className="text-sm text-slate-300 space-y-3 mb-8 flex-1">
                 <li>✓ Everything in Professional</li>
                 <li>✓ Up to 10 staff profiles</li>
-                <li>✓ Multiple locations</li>
+                <li>✓ Staff clock-in and hours</li>
                 <li>✓ Priority support</li>
               </ul>
               <button onClick={choosePlan} className="w-full py-3 text-xs font-black uppercase tracking-wider bg-slate-800 hover:bg-slate-700 rounded-xl text-white transition">Get Business</button>

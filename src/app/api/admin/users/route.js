@@ -89,6 +89,23 @@ export async function PATCH(req) {
       await logAdmin(admin, act, u, on ? 'Login blocked and site unpublished' : 'Login allowed again');
       return NextResponse.json({ ok: true });
     }
+    if (act === 'plan') {
+      // Give someone a plan by hand (a free trial or a thank-you), or put them back on Starter.
+      const plan = ['starter', 'pro', 'biz'].includes(b.plan) ? b.plan : null;
+      if (!plan) return bad('Unknown plan');
+      if (plan === 'starter') {
+        await sql`delete from seller_plans where user_id = ${id}`;
+        await logAdmin(admin, 'plan', u, 'Back to Starter');
+        return NextResponse.json({ ok: true });
+      }
+      const months = Math.min(24, Math.max(1, parseInt(b.months, 10) || 1));
+      await sql`insert into seller_plans (user_id, plan, cycle, status, provider, expires_at, updated_at)
+        values (${id}, ${plan}, 'monthly', 'active', 'admin', now() + (${months}::int * interval '1 month'), now())
+        on conflict (user_id) do update set plan = excluded.plan, status = 'active', provider = 'admin',
+          expires_at = now() + (${months}::int * interval '1 month'), updated_at = now()`;
+      await logAdmin(admin, 'plan', u, `${plan} for ${months} month(s), given by admin`);
+      return NextResponse.json({ ok: true });
+    }
     if (act === 'reset_password') {
       const password = tempPassword();
       const hash = await bcrypt.hash(password, 12);

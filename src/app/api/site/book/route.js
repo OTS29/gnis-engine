@@ -3,6 +3,8 @@ import jwt from 'jsonwebtoken';
 import { sql } from '@/lib/db';
 import { hit, clientIp } from '@/lib/rateLimit';
 import { notifyNewBooking } from '@/lib/notify';
+import { startDeposit } from '@/lib/deposits';
+import { planOfUser, limitsFor } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +28,7 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'Invalid date or time' }, { status: 400 });
     }
 
-    const [site] = await sql`select id, data from sites where slug = ${slug} and published`;
+    const [site] = await sql`select id, owner_id, slug, data, stripe_account_id, stripe_ready, pay_provider, pay_account, pay_ready from sites where slug = ${slug} and published`;
     if (!site) return NextResponse.json({ ok: false, error: 'Site not found' }, { status: 404 });
 
     const match = (site.data?.services || []).find((s) => s.name === service);
@@ -58,7 +60,12 @@ export async function POST(req) {
       catch (e) { console.error('NOTIFY_NEW_FAULT:', e); }
     });
 
-    return NextResponse.json({ ok: true, price }, { status: 201 });
+    // Deposit: only when the seller turned it on, their plan includes it, and a payment provider is connected.
+    let payUrl = null;
+    if (Number(site.data?.depositPercent) > 0 && price > 0 && limitsFor(await planOfUser(site.owner_id)).deposits) {
+      payUrl = await startDeposit(req, site, { id: row.id, price, service: match.name, contact, customer });
+    }
+    return NextResponse.json({ ok: true, price, payUrl }, { status: 201 });
   } catch (e) {
     console.error('SITE_BOOK_FAULT:', e);
     return NextResponse.json({ ok: false, error: 'Booking failed' }, { status: 500 });

@@ -46,6 +46,8 @@ export const DEFAULT_DATA = {
   taxRate: 0,
   taxIncluded: true,
   vatNumber: '',
+  depositPercent: 0,
+  whatsappReminders: false,
   services: [{ name: 'Consultation', price: 30, duration: '30 min', desc: 'A first session to talk through what you need.', negotiable: false, minPrice: 0 }],
   products: [],
   gallery: [],
@@ -82,6 +84,8 @@ export function cleanData(d) {
     taxRate: Math.min(30, Math.max(0, Number(x.taxRate) || 0)),
     taxIncluded: x.taxIncluded !== false,
     vatNumber: str(x.vatNumber, 30),
+    depositPercent: Math.min(100, Math.max(0, Math.round(Number(x.depositPercent) || 0))),
+    whatsappReminders: !!x.whatsappReminders,
     services: x.services.slice(0, 30).map((s) => {
       const price = Math.max(0, Number(s.price) || 0);
       const minPrice = Math.min(price, Math.max(0, Number(s.minPrice) || 0));

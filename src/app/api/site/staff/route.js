@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { getSession, isOwnerRole } from '@/lib/session';
 import crypto from 'crypto';
+import { planOfUser, limitsFor, PLAN_LABEL } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +50,13 @@ export async function POST(req) {
     const { name } = await req.json();
     const clean = String(name || '').trim().slice(0, 60);
     if (!clean) return NextResponse.json({ ok: false, error: 'Enter a name' }, { status: 400 });
+    const s = getSession(req);
+    const plan = await planOfUser(s.userId);
+    const max = limitsFor(plan).staff;
+    const [c] = await sql`select count(*)::int as n from site_staff where site_id = ${site.id} and active`;
+    if ((c?.n || 0) >= max) {
+      return NextResponse.json({ ok: false, error: `The ${PLAN_LABEL[plan]} plan allows up to ${max} staff. Upgrade in the Billing tab to add more.` }, { status: 402 });
+    }
     const code = await freshCode(site.id);
     await sql`insert into site_staff (site_id, name, code) values (${site.id}, ${clean}, ${code})`;
     return NextResponse.json({ ok: true }, { status: 201 });

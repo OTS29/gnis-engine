@@ -1,5 +1,6 @@
 import { sendEmail } from '@/lib/email';
 import { sendSms } from '@/lib/sms';
+import { sendWhatsApp } from '@/lib/whatsapp';
 import { buildIcs, googleCalendarUrl, durationMinutes } from '@/lib/ics';
 import { formatMoney } from '@/lib/siteDefaults';
 import { mail } from '@/lib/i18n';
@@ -38,7 +39,12 @@ export async function notifyNewBooking(site, b) {
 
 export async function notifyStatus(site, b, status) {
   const { data, lang, vars, date, time, minutes } = ctx(site, b);
-  if (!isEmail(b.contact) || !['approved', 'cancelled'].includes(status)) return;
+  if (!['approved', 'cancelled'].includes(status)) return;
+  if (!isEmail(b.contact)) {
+    // Phone-only customers: WhatsApp, when the seller's plan and settings allow it.
+    if (site.wa) await sendWhatsApp(b.contact, mail(lang, status === 'approved' ? 'okBody' : 'cancelBody', vars), { name: b.customer, service: b.service, business: data.businessName || '', date, time });
+    return;
+  }
   const accent = data.accent || '#2563eb';
   if (status === 'approved') {
     const ev = { title: `${b.service} · ${data.businessName}`, date, time, minutes, location: data.location, description: `Booking with ${data.businessName}` };
@@ -61,6 +67,9 @@ export async function sendReminder(site, b) {
   if (isEmail(b.contact)) {
     await sendEmail({ to: b.contact.trim(), subject: mail(lang, 'remSubject'), html: page(accent, mail(lang, 'remSubject'), mail(lang, 'remBody', vars)), replyTo: isEmail(data.email) ? data.email : undefined });
   } else {
-    await sendSms(b.contact, mail(lang, 'sms', vars));
+    // WhatsApp first when allowed, SMS as the fallback.
+    let sent = false;
+    if (site.wa) sent = (await sendWhatsApp(b.contact, mail(lang, 'remBody', vars), { name: b.customer, service: b.service, business: data.businessName || '', date: vars.date, time: vars.time })).ok;
+    if (!sent) await sendSms(b.contact, mail(lang, 'sms', vars));
   }
 }

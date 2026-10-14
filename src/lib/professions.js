@@ -12,6 +12,21 @@ export const PROFESSIONS = [
   { slug: 'mechanics', name: 'Mechanics', noun: 'garage', pain: 'a full diary of phone calls', service: 'Full service', example: 'MOT prep, servicing, repairs' },
   { slug: 'massage-therapists', name: 'Massage Therapists', noun: 'massage practice', pain: 'no-shows that waste a treatment slot', service: 'Deep tissue massage', example: 'Sports, deep tissue, relaxation' },
   { slug: 'tailors', name: 'Tailors and Fashion Designers', noun: 'tailoring business', pain: 'fittings that clash and orders that get lost', service: 'Suit alteration', example: 'Alterations, bespoke, fittings' },
+  { slug: 'laundry-services', name: 'Laundry Services', noun: 'laundry business', pain: 'lost orders and customers asking where their clothes are', service: 'Wash and fold', example: 'Wash and fold, dry cleaning, pickup and delivery' },
+  { slug: 'phone-repair', name: 'Phone Repair Shops', noun: 'repair shop', pain: 'walk-ins with no way to book or pay a deposit', service: 'Screen replacement', example: 'Screens, batteries, unlocking, accessories' },
+  { slug: 'caterers', name: 'Caterers', noun: 'catering business', pain: 'quotes by message and unpaid deposits', service: 'Party platter', example: 'Events, weddings, office lunches' },
+  { slug: 'event-planners', name: 'Event Planners', noun: 'events business', pain: 'enquiries scattered across chats', service: 'Event consultation', example: 'Weddings, birthdays, corporate events' },
+  { slug: 'plumbers', name: 'Plumbers', noun: 'plumbing business', pain: 'missed calls while on a job', service: 'Call-out', example: 'Leaks, boilers, bathrooms, emergencies' },
+  { slug: 'electricians', name: 'Electricians', noun: 'electrical business', pain: 'quoting jobs and chasing payment', service: 'Safety inspection', example: 'Rewiring, fuse boards, lighting, repairs' },
+  { slug: 'driving-instructors', name: 'Driving Instructors', noun: 'driving school', pain: 'cancelled lessons and gaps in the diary', service: '1-hour lesson', example: 'Lessons, intensive courses, test prep' },
+  { slug: 'dog-groomers', name: 'Dog Groomers', noun: 'grooming salon', pain: 'no-shows after a slot is held', service: 'Full groom', example: 'Bath, trim, nails, puppy intro' },
+  { slug: 'lash-technicians', name: 'Lash and Brow Technicians', noun: 'lash studio', pain: 'late cancellations on long appointments', service: 'Classic lash set', example: 'Lash sets, infills, brow shaping' },
+  { slug: 'tattoo-artists', name: 'Tattoo Artists', noun: 'tattoo studio', pain: 'no-shows that cost a full session', service: 'Tattoo consultation', example: 'Custom pieces, flash, touch-ups' },
+  { slug: 'dj-and-musicians', name: 'DJs and Musicians', noun: 'entertainment business', pain: 'date clashes and deposits by bank transfer', service: 'Party DJ set', example: 'Weddings, clubs, private events' },
+  { slug: 'car-valeting', name: 'Car Valeters', noun: 'valeting business', pain: 'back-and-forth messages to fix a time', service: 'Full valet', example: 'Interior, exterior, detailing, mobile valet' },
+  { slug: 'gardeners', name: 'Gardeners', noun: 'gardening business', pain: 'quoting visits and rescheduling for rain', service: 'Garden tidy', example: 'Lawn care, hedges, clearance, planting' },
+  { slug: 'yoga-instructors', name: 'Yoga and Pilates Instructors', noun: 'studio', pain: 'class bookings handled by message', service: 'Private session', example: 'Classes, private sessions, workshops' },
+  { slug: 'web-developers', name: 'Web Developers and Designers', noun: 'digital studio', pain: 'discovery calls that never get booked', service: 'Discovery call', example: 'Websites, branding, maintenance' },
 ];
 
 export const bySlug = (slug) => PROFESSIONS.find((p) => p.slug === slug);
