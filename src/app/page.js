@@ -356,7 +356,7 @@ export default function LandingPage() {
                     <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Signed in</p>
                     <p className="text-xs font-bold uppercase italic">{currentUser.name}</p>
                   </div>
-                  <Link href="/dashboard" className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] tracking-widest uppercase hover:bg-green-500 transition">Dashboard</Link>
+                  <Link href={currentUser.role === 'client' ? '/portal/bookings' : '/dashboard'} className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] tracking-widest uppercase hover:bg-green-500 transition">Dashboard</Link>
                   <button onClick={handleLogout} className="p-2.5 rounded-xl border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition text-[10px] font-black">LOGOUT</button>
                 </>
               ) : (
@@ -366,7 +366,7 @@ export default function LandingPage() {
 
             <div className="md:hidden">
               {currentUser ? (
-                <Link href="/dashboard" className="bg-green-600 text-white px-3 py-2 rounded-lg font-black text-[10px] uppercase">Dashboard</Link>
+                <Link href={currentUser.role === 'client' ? '/portal/bookings' : '/dashboard'} className="bg-green-600 text-white px-3 py-2 rounded-lg font-black text-[10px] uppercase">Dashboard</Link>
               ) : (
                 <button onClick={() => setActiveModal('login')} className="bg-green-600 text-white px-3 py-2 rounded-lg font-black text-[10px] uppercase">Log in</button>
               )}

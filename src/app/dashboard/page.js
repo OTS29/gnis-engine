@@ -151,7 +151,12 @@ export default function Dashboard() {
     (async () => {
       try {
         const r = await fetch('/api/site');
-        if (r.status === 401) { window.location.href = '/'; return; }
+        if (r.status === 401) {
+          // Signed in but not a professional (a client account)? Send them to their own page instead of the home page.
+          const me = await getJson('/api/users/get');
+          window.location.href = me?.ok && me.data?.role === 'client' ? '/portal/bookings' : '/';
+          return;
+        }
         const j = await r.json();
         if (j.plan) setPlan(j.plan);
         if (j.data) { setTemplate(j.data.template || 'classic'); setData(mergeData(j.data.data)); setSlug(j.data.slug); }
