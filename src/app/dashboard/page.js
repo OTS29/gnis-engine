@@ -468,6 +468,43 @@ export default function Dashboard() {
               </label>
               <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Needs card payments connected in the Payments tab. The money goes to you like any other payment.</p>
             </div>
+            <div style={box}>
+              <strong>Contact and social links</strong>
+              <span style={lbl}>Announcement bar at the top of your site (optional, for example “Open late on Fridays”)</span>
+              <input style={inp} maxLength={160} value={data.announcement || ''} onChange={(e) => set('announcement', e.target.value)} />
+              <span style={lbl}>WhatsApp number (shows a green chat button on your site)</span>
+              <input style={inp} inputMode="tel" placeholder="08012345678 or +447700900123" value={data.whatsapp || ''} onChange={(e) => set('whatsapp', e.target.value)} />
+              <span style={lbl}>Instagram (your @name or full link)</span>
+              <input style={inp} placeholder="@yourname" value={data.instagram || ''} onChange={(e) => set('instagram', e.target.value)} />
+              <span style={lbl}>Facebook (page name or full link)</span>
+              <input style={inp} placeholder="yourpage" value={data.facebook || ''} onChange={(e) => set('facebook', e.target.value)} />
+              <span style={lbl}>TikTok (your @name or full link)</span>
+              <input style={inp} placeholder="@yourname" value={data.tiktok || ''} onChange={(e) => set('tiktok', e.target.value)} />
+            </div>
+            <div style={box}>
+              <strong>Questions and answers (FAQ)</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>Answer what customers always ask, like “Do you take walk-ins?” or “Do I pay a deposit?”. Up to 8.</p>
+              {(data.faqs || []).map((f, i) => (
+                <div key={i} style={{ borderTop: i ? '1px solid #f3f4f6' : 'none', paddingTop: i ? 10 : 0, marginTop: i ? 10 : 0 }}>
+                  <input style={inp} placeholder="Question" maxLength={140} value={f.q} onChange={(e) => setItem('faqs', i, { q: e.target.value })} />
+                  <textarea style={{ ...inp, minHeight: 56 }} placeholder="Answer" maxLength={600} value={f.a} onChange={(e) => setItem('faqs', i, { a: e.target.value })} />
+                  <button style={sm('#dc2626')} onClick={() => delItem('faqs', i)}>Remove</button>
+                </div>
+              ))}
+              {(data.faqs || []).length < 8 && <button style={{ ...btn('#374151'), marginTop: 8 }} onClick={() => addItem('faqs', { q: '', a: '' })}>Add a question</button>}
+            </div>
+            <div style={box}>
+              <strong>Customer reviews</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>Only add words a real customer actually said, with their permission. Never invent reviews. Up to 6.</p>
+              {(data.reviews || []).map((r, i) => (
+                <div key={i} style={{ borderTop: i ? '1px solid #f3f4f6' : 'none', paddingTop: i ? 10 : 0, marginTop: i ? 10 : 0 }}>
+                  <input style={inp} placeholder="Customer first name" maxLength={60} value={r.name} onChange={(e) => setItem('reviews', i, { name: e.target.value })} />
+                  <textarea style={{ ...inp, minHeight: 56 }} placeholder="What they said" maxLength={400} value={r.text} onChange={(e) => setItem('reviews', i, { text: e.target.value })} />
+                  <button style={sm('#dc2626')} onClick={() => delItem('reviews', i)}>Remove</button>
+                </div>
+              ))}
+              {(data.reviews || []).length < 6 && <button style={{ ...btn('#374151'), marginTop: 8 }} onClick={() => addItem('reviews', { name: '', text: '' })}>Add a review</button>}
+            </div>
           </>)}
 
           {tab === 'services' && (<>

@@ -50,6 +50,13 @@ export const DEFAULT_DATA = {
   whatsappReminders: false,
   giftCards: false,
   rebookDays: 0,
+  announcement: '',
+  whatsapp: '',
+  instagram: '',
+  facebook: '',
+  tiktok: '',
+  faqs: [],
+  reviews: [],
   services: [{ name: 'Consultation', price: 30, duration: '30 min', desc: 'A first session to talk through what you need.', negotiable: false, minPrice: 0 }],
   products: [],
   gallery: [],
@@ -62,6 +69,8 @@ export function mergeData(d) {
   return {
     ...DEFAULT_DATA,
     ...x,
+    faqs: Array.isArray(x.faqs) ? x.faqs : [],
+    reviews: Array.isArray(x.reviews) ? x.reviews : [],
     services: Array.isArray(x.services) ? x.services : DEFAULT_DATA.services,
     products: Array.isArray(x.products) ? x.products : [],
     gallery: Array.isArray(x.gallery) ? x.gallery : [],
@@ -88,6 +97,13 @@ export function cleanData(d) {
     vatNumber: str(x.vatNumber, 30),
     depositPercent: Math.min(100, Math.max(0, Math.round(Number(x.depositPercent) || 0))),
     whatsappReminders: !!x.whatsappReminders,
+    announcement: str(x.announcement, 160),
+    whatsapp: str(x.whatsapp, 30).replace(/[^\d+\s()-]/g, ''),
+    instagram: str(x.instagram, 100).replace(/[\s<>"']/g, ''),
+    facebook: str(x.facebook, 100).replace(/[\s<>"']/g, ''),
+    tiktok: str(x.tiktok, 100).replace(/[\s<>"']/g, ''),
+    faqs: x.faqs.slice(0, 8).map((f) => ({ q: str(f?.q, 140), a: str(f?.a, 600) })).filter((f) => f.q && f.a),
+    reviews: x.reviews.slice(0, 6).map((r) => ({ name: str(r?.name, 60), text: str(r?.text, 400) })).filter((r) => r.name && r.text),
     giftCards: !!x.giftCards,
     rebookDays: [0, 14, 21, 28, 42, 56, 90].includes(Number(x.rebookDays)) ? Number(x.rebookDays) : 0,
     services: x.services.slice(0, 30).map((s) => {
@@ -101,6 +117,29 @@ export function cleanData(d) {
     })).filter((p) => p.name),
     gallery: x.gallery.slice(0, 12).map(img).filter(Boolean),
   };
+}
+
+const CC = { GBP: '44', NGN: '234', GHS: '233', KES: '254', ZAR: '27', USD: '1', CAD: '1', AUD: '61', EUR: '353', CHF: '41' };
+// WhatsApp chat link from a phone number. Returns '' when the number is not usable.
+export function waUrl(number, currency) {
+  let d = String(number || '').replace(/[^\d+]/g, '');
+  if (d.startsWith('+')) d = d.slice(1);
+  else if (d.startsWith('00')) d = d.slice(2);
+  else if (d.startsWith('0')) d = (CC[String(currency).toUpperCase()] || '44') + d.slice(1);
+  return /^\d{10,15}$/.test(d) ? `https://wa.me/${d}` : '';
+}
+// Social profile link from a handle ("@jojo") or a full link. Only the real network's address is allowed.
+export function socialUrl(kind, v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  const host = { instagram: 'instagram.com', facebook: 'facebook.com', tiktok: 'tiktok.com' }[kind];
+  if (!host) return '';
+  if (/^https?:\/\//i.test(s)) {
+    try { const u = new URL(s); return u.hostname === host || u.hostname.endsWith('.' + host) ? u.toString() : ''; } catch { return ''; }
+  }
+  const handle = s.replace(/^@/, '').replace(/[^A-Za-z0-9._-]/g, '');
+  if (!handle) return '';
+  return kind === 'tiktok' ? `https://tiktok.com/@${handle}` : `https://${host}/${handle}`;
 }
 
 // What visitors are allowed to see. The lowest accepted price must never leave the server.

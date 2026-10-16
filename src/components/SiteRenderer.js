@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatMoney, withTax } from '@/lib/siteDefaults';
+import { waUrl, socialUrl, formatMoney, withTax } from '@/lib/siteDefaults';
 import { tr } from '@/lib/i18n';
 import CookieBanner from '@/components/CookieBanner';
 
@@ -246,6 +246,19 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
 .sr-prod:hover img{transform:scale(1.06)}
 .sr-input{width:100%;padding:13px 14px;border:1px solid ${t.line};border-radius:${Math.max(t.radius - 4, 6)}px;background:${t.bg};color:${t.fg};font:inherit;font-size:16px}
 .sr-input:focus{outline:2px solid ${a};outline-offset:1px}
+.sr-input[type=date],.sr-input[type=time]{display:block;min-width:0;max-width:100%;min-height:50px;-webkit-appearance:none;appearance:none;text-align:left;color:${t.fg};-webkit-text-fill-color:${t.fg};background:${t.bg}}
+.sr-input[type=date]::-webkit-date-and-time-value,.sr-input[type=time]::-webkit-date-and-time-value{text-align:left;min-height:1.5em}
+.sr-input[type=date]:not(.sr-has)::before,.sr-input[type=time]:not(.sr-has)::before{content:attr(data-ph);color:${t.mute};-webkit-text-fill-color:${t.mute};margin-right:6px}
+.sr-input[type=date]:focus::before,.sr-input[type=time]:focus::before{content:none}
+.sr-lbl{display:block;font-size:13px;font-weight:600;margin:0 0 6px;color:${t.mute}}
+.sr-dt{display:grid;gap:12px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+@media (max-width:420px){.sr-dt{grid-template-columns:minmax(0,1fr)}}
+.sr-faq details{border:1px solid ${t.line};border-radius:${Math.max(t.radius - 4, 8)}px;padding:14px 16px;background:${t.card}}
+.sr-faq details+details{margin-top:10px}
+.sr-faq summary{cursor:pointer;font-weight:700;font-size:16px}
+.sr-faq p{margin:10px 0 0;color:${t.mute};white-space:pre-wrap}
+.sr-wa{position:fixed;left:16px;bottom:16px;z-index:40;display:flex;align-items:center;gap:8px;background:#25d366;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 16px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+@media (max-width:520px){.sr-wa span{display:none}.sr-wa{padding:14px}}
 .sr-reveal{transition:opacity .8s ease,transform .8s ease}
 .sr-js .sr-reveal{opacity:0;transform:translateY(28px)}
 .sr-js .sr-reveal.sr-in{opacity:1;transform:none}
@@ -286,6 +299,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       <style>{css}</style>
 
       {depositBanner && <div style={{ background: depositBanner === 'ok' ? '#059669' : '#d97706', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L(depositBanner === 'ok' ? 'depositOk' : 'depositFail')}</div>}
+      {data.announcement && <div style={{ background: a, color: '#fff', textAlign: 'center', padding: '10px 16px', fontWeight: 600, fontSize: 14 }}>{data.announcement}</div>}
       {giftBanner && <div style={{ background: giftBanner === 'ok' ? '#059669' : '#d97706', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L(giftBanner === 'ok' ? 'giftOk' : 'giftFail')}</div>}
       {paidBanner && <div style={{ background: '#059669', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L('paidOk')}</div>}
 
@@ -418,6 +432,22 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
         </section>
       )}
 
+      {(data.reviews || []).length > 0 && (
+        <section data-sec="reviews" className="sr-sec" style={{ background: t.bg }}>
+          <div className="sr-wrap">
+            <h2 className="sr-h2 sr-reveal">{L('reviewsTitle')}</h2>
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', marginTop: 24 }}>
+              {data.reviews.map((r, i) => (
+                <div key={i} className="sr-card sr-reveal">
+                  <p style={{ margin: '0 0 12px', fontSize: 16 }}>“{r.text}”</p>
+                  <strong style={{ fontSize: 14 }}>{r.name}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       <section data-sec="about" className="sr-sec" style={{ background: t.alt }}>
         <div className="sr-wrap sr-split">
           <div>
@@ -431,6 +461,18 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
           </div>
         </div>
       </section>
+
+      {(data.faqs || []).length > 0 && (
+        <section data-sec="faq" className="sr-sec" style={{ background: t.alt }}>
+          <div className="sr-wrap" style={{ maxWidth: 820 }}>
+            <h2 className="sr-h2 sr-reveal">{L('faqTitle')}</h2>
+            <p className="sr-sub sr-reveal sr-d1">{L('faqSub')}</p>
+            <div className="sr-faq sr-reveal sr-d2" style={{ marginTop: 20 }}>
+              {data.faqs.map((f, i) => (<details key={i}><summary>{f.q}</summary><p>{f.a}</p></details>))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section data-sec="book" className="sr-sec" style={{ background: t.bg }}>
         <div className="sr-wrap sr-split">
@@ -477,9 +519,15 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
               </div>
             )}
 
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
-              <input className={input} type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-              <input className={input} type="time" required value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+            <div className="sr-dt">
+              <div>
+                <label className="sr-lbl">{L('dateLabel')}</label>
+                <input className={`${input}${form.date ? ' sr-has' : ''}`} type="date" required data-ph={L('chooseDate')} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              </div>
+              <div>
+                <label className="sr-lbl">{L('timeLabel')}</label>
+                <input className={`${input}${form.time ? ' sr-has' : ''}`} type="time" required data-ph={L('chooseTime')} value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+              </div>
             </div>
             {Number(data.depositPercent) > 0 && payOnline && selected && Number(locked?.price ?? selected.price) > 0 && (
               <div style={{ fontSize: 13, color: t.mute }}>{L('depositNote', { pct: data.depositPercent, amt: money((Number(locked?.price ?? selected.price) * Number(data.depositPercent)) / 100) })}</div>
@@ -532,6 +580,9 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
             </div>
             <div>
               <div style={{ color: '#fff', fontWeight: 700, marginBottom: 12 }}>{L('contact')}</div>
+              {socialUrl('instagram', data.instagram) && <a href={socialUrl('instagram', data.instagram)} target="_blank" rel="noopener noreferrer">📷 Instagram</a>}
+              {socialUrl('facebook', data.facebook) && <a href={socialUrl('facebook', data.facebook)} target="_blank" rel="noopener noreferrer">👍 Facebook</a>}
+              {socialUrl('tiktok', data.tiktok) && <a href={socialUrl('tiktok', data.tiktok)} target="_blank" rel="noopener noreferrer">🎵 TikTok</a>}
               {data.phone && <a href={`tel:${data.phone.replace(/\s/g, '')}`}>📞 {data.phone}</a>}
               {data.email && <a href={`mailto:${data.email}`}>✉️ {data.email}</a>}
               {data.location && <a href={`https://www.google.com/maps/search/${encodeURIComponent(data.location)}`} target="_blank" rel="noreferrer">📍 {data.location}</a>}
@@ -544,6 +595,13 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
         </div>
         {showBadge && <div style={{ textAlign: 'center', fontSize: 12, opacity: 0.7, padding: '0 0 18px' }}><a href="/" style={{ color: 'inherit' }}>{L('builtWith')}</a></div>}
       </footer>
+
+      {waUrl(data.whatsapp, cur) && (
+        <a className="sr-wa" href={waUrl(data.whatsapp, cur)} target="_blank" rel="noopener noreferrer" aria-label={L('whatsappChat')}>
+          <span aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>💬</span>
+          <span>{L('whatsappChat')}</span>
+        </a>
+      )}
 
       {!preview && <CookieBanner lang={lang} accent={a} />}
 
