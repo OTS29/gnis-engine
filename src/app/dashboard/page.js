@@ -105,6 +105,8 @@ export default function Dashboard() {
   const [customers, setCustomers] = useState(null);
   const [custQ, setCustQ] = useState('');
   const [custMsg, setCustMsg] = useState('');
+  const [dueDays, setDueDays] = useState(0);
+  const [showDue, setShowDue] = useState(true);
   const [cards, setCards] = useState(null);
   const [redeem, setRedeem] = useState({ code: '', amount: '', msg: '', ok: false, balance: null, busy: false });
   const [plan, setPlan] = useState('starter');
@@ -211,6 +213,27 @@ export default function Dashboard() {
     const j = await sendJson('/api/site/customers', 'PUT', { key: c.k, ...patch });
     setCustMsg(j.ok ? 'Saved' : (j.error || 'Could not save'));
     setTimeout(() => setCustMsg(''), 1800);
+  };
+  const dueDaysEff = dueDays || Number(data.rebookDays) || 28;
+  const dueList = (customers || []).filter((c) => {
+    if (!c.last_visit || c.next_booking || c.optout) return false;
+    const ago = (Date.now() - new Date(c.last_visit + 'T12:00:00').getTime()) / 86400000;
+    if (ago < dueDaysEff || ago > 365) return false;
+    return !(c.last_rebook && String(c.last_rebook).slice(0, 10) >= String(c.last_visit).slice(0, 10));
+  });
+  const markContacted = (list) => {
+    const keys = new Set(list.map((c) => c.k));
+    setCustomers((all) => all.map((x) => (keys.has(x.k) ? { ...x, last_rebook: new Date().toISOString() } : x)));
+    list.forEach((c) => { sendJson('/api/site/customers', 'PUT', { key: c.k, contacted: true }); });
+  };
+  const siteUrl = () => `${window.location.origin}/site/${slug}`;
+  const dueText = (name) => `Hi${name ? ' ' + name : ''}, it has been a while since your last visit to ${data.businessName}. Would you like to book again? ${siteUrl()}`;
+  const emailAllDue = () => {
+    const batch = dueList.filter((c) => String(c.contact).includes('@')).slice(0, 25);
+    if (!batch.length) return;
+    const bcc = batch.map((c) => String(c.contact).trim()).join(',');
+    window.location.href = `mailto:?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(`Time to book again? ${data.businessName}`)}&body=${encodeURIComponent(dueText(''))}`;
+    markContacted(batch);
   };
   const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const downloadCustomers = () => {
@@ -567,6 +590,36 @@ export default function Dashboard() {
             <div style={{ ...box, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <span style={{ fontSize: 14 }}>{customers.length} customers · {customers.filter((c) => c.completed >= 3).length} regulars · {fm(customers.reduce((t, c) => t + c.spent, 0))} from completed visits</span>
               <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{custMsg && <span style={{ fontSize: 12, color: '#059669' }}>{custMsg}</span>}<button style={btn('#059669')} onClick={downloadCustomers}>Download</button></span>
+            </div>
+            <div style={box}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <strong>Due for a visit: {dueList.length}</strong>
+                <span style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+                  Last visit over
+                  <select style={{ ...inp, width: 'auto', marginBottom: 0, padding: '6px 8px' }} value={dueDaysEff} onChange={(e) => setDueDays(Number(e.target.value))}>
+                    {[14, 21, 28, 42, 56, 90].map((n) => (<option key={n} value={n}>{n} days ago</option>))}
+                  </select>
+                  <button style={sm('#6b7280')} onClick={() => setShowDue(!showDue)}>{showDue ? 'Hide' : 'Show'}</button>
+                </span>
+              </div>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0 0' }}>People whose last Completed visit was that long ago, who have nothing booked. Once you message someone they leave this list until their next visit.</p>
+              {showDue && dueList.length > 0 && (<>
+                {dueList.some((c) => String(c.contact).includes('@')) && (
+                  <button style={{ ...btn('#2563eb'), marginTop: 10 }} onClick={emailAllDue}>Email everyone due ({Math.min(25, dueList.filter((c) => String(c.contact).includes('@')).length)} at a time)</button>
+                )}
+                {dueList.map((c) => {
+                  const isMail = String(c.contact).includes('@');
+                  const wa = isMail ? null : rebookLink(c);
+                  return (
+                    <div key={c.k} style={{ borderTop: '1px solid #f3f4f6', marginTop: 10, paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 14 }}><b>{c.name}</b> <span style={{ color: '#6b7280' }}>· last visit {c.last_visit}</span></span>
+                      {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={() => markContacted([c])} style={{ ...sm('#25d366'), textDecoration: 'none' }}>WhatsApp them</a>}
+                      {isMail && <button style={sm('#6b7280')} onClick={() => markContacted([c])}>Mark as messaged</button>}
+                    </div>
+                  );
+                })}
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '10px 0 0' }}>Emails go as hidden copies (BCC), so customers cannot see each other. Your email app opens with the message ready. Press send there.</p>
+              </>)}
             </div>
             <input style={inp} placeholder="Search by name or contact" value={custQ} onChange={(e) => setCustQ(e.target.value)} />
             {customers.length === 0 && <div style={box}>No customers yet. People appear here after their first booking. Mark visits as Completed on the Bookings tab so spending and regulars are counted.</div>}

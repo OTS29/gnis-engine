@@ -52,6 +52,10 @@ export async function PUT(req) {
       await sql`insert into site_customers (site_id, contact_key, rebook_optout) values (${site.id}, ${key}, ${b.optout})
         on conflict (site_id, contact_key) do update set rebook_optout = excluded.rebook_optout`;
     }
+    if (b.contacted === true) {
+      await sql`insert into site_customers (site_id, contact_key, last_rebook_at) values (${site.id}, ${key}, now())
+        on conflict (site_id, contact_key) do update set last_rebook_at = now()`;
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error('CUSTOMERS_PUT_FAULT:', e);
