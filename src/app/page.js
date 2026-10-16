@@ -123,6 +123,8 @@ export default function LandingPage() {
 
   // Live numbers and the real business directory
   const [stats, setStats] = useState(null);
+  const [top, setTop] = useState([]);
+  useEffect(() => { (async () => { try { const j = await (await fetch('/api/public/top')).json(); if (j.ok) setTop(j.items || []); } catch {} })(); }, []);
   const [shown, setShown] = useState({ businesses: 0, users: 0, bookings: 0, today: 0 });
   const [dir, setDir] = useState({ items: [], countries: [], hasMore: false, loading: true });
   const [dirQ, setDirQ] = useState('');
@@ -644,6 +646,31 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* --- TOP BUSINESSES --- */}
+      <section id="top-businesses" className="max-w-6xl mx-auto py-14 px-5 sm:px-6 border-t border-slate-900">
+        <h2 className="text-2xl sm:text-3xl font-black mb-2">🏆 Top businesses this month</h2>
+        <p className="text-slate-400 text-sm mb-6">Ranked by completed visits in the last 30 days. Only businesses that chose to appear are listed.</p>
+        {top.length === 0 ? (
+          <p className="text-slate-500 text-sm">The first rankings appear once businesses complete 3 visits in a month. Own a business? <a href="/signup" className="text-green-500 font-bold">Join free</a> and be first.</p>
+        ) : (
+          <div className="grid gap-3">
+            {top.map((t) => (
+              <a key={t.slug} href={`/site/${t.slug}`} className="flex items-center gap-4 bg-slate-900 border border-slate-800 hover:border-green-500 transition rounded-2xl p-4">
+                <div className="text-2xl font-black w-10 text-center text-green-500">{t.rank <= 3 ? ['🥇','🥈','🥉'][t.rank - 1] : '#' + t.rank}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black truncate">{t.name}</div>
+                  <div className="text-xs text-slate-400 truncate">{[t.skill, t.area].filter(Boolean).join(' · ')}</div>
+                </div>
+                <div className="text-right text-xs text-slate-300 leading-5">
+                  <div><b>{t.visits30}</b> visits</div>
+                  <div>{t.returnRate !== null ? <><b>{t.returnRate}%</b> return</> : 'new'} · <b>{t.newCustomers30}</b> new</div>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* --- MARKETPLACE --- */}

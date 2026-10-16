@@ -469,6 +469,13 @@ export default function Dashboard() {
               <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Needs card payments connected in the Payments tab. The money goes to you like any other payment.</p>
             </div>
             <div style={box}>
+              <strong>Top businesses</strong>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, margin: '6px 0' }}>
+                <input type="checkbox" checked={!!data.showInTop} onChange={(e) => set('showInTop', e.target.checked)} /> Show my business in the public “Top businesses” list
+              </label>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Ranked by visits you mark Completed in the last 30 days (you need at least 3). The list shows your business name, area, completed visits, how many customers came back and how many are new. Top 5 get a badge on their page and show first in the directory. Press Save after changing this.</p>
+            </div>
+            <div style={box}>
               <strong>Contact and social links</strong>
               <span style={lbl}>Announcement bar at the top of your site (optional, for example “Open late on Fridays”)</span>
               <input style={inp} maxLength={160} value={data.announcement || ''} onChange={(e) => set('announcement', e.target.value)} />
@@ -772,7 +779,7 @@ export default function Dashboard() {
           {tab === 'growth' && (!slug ? needSave : <>
             <div style={box}>
               <strong>Your referral link</strong>
-              <p style={{ fontSize: 14, color: '#374151' }}>Share this with other professionals. When they sign up through it, it is counted here.</p>
+              <p style={{ fontSize: 14, color: '#374151' }}>Share this with other professionals. When they sign up through it, it is counted here. <b>You get one free month of Professional each time a business you referred pays for a plan</b> (up to 12 a year).</p>
               {growth ? (<>
                 <code style={{ fontSize: 13, wordBreak: 'break-all', display: 'block', marginBottom: 8 }}>{typeof window !== 'undefined' ? `${window.location.origin}/r/${growth.refCode}` : ''}</code>
                 <button style={sm('#374151')} onClick={() => copy(`${window.location.origin}/r/${growth.refCode}`)}>{copied ? 'Copied ✓' : 'Copy link'}</button>

@@ -6,6 +6,7 @@ import { publicData } from '@/lib/siteDefaults';
 import { SITE_URL } from '@/lib/site';
 import { providerForSite } from '@/lib/payments';
 import { planOfUser, limitsFor } from '@/lib/plans';
+import { getTop } from '@/lib/leaderboard';
 
 // Cached for 60 seconds. Saving in the dashboard refreshes it straight away.
 export const revalidate = 60;
@@ -15,7 +16,9 @@ const load = cache(async (slug) => {
   if (!site) return null;
   const [c] = await sql`select count(*)::int as n from site_bookings where site_id = ${site.id} and lower(status) <> 'cancelled'`;
   const badge = limitsFor(await planOfUser(site.owner_id)).badge;
-  return { site, count: c?.n || 0, badge };
+  let topRank = 0;
+  try { topRank = ((await getTop(5)).find((t) => t.slug === slug) || {}).rank || 0; } catch {}
+  return { site, count: c?.n || 0, badge, topRank };
 });
 
 export async function generateMetadata({ params }) {
@@ -38,7 +41,7 @@ export default async function SitePage({ params }) {
   const { slug } = await params;
   const found = await load(slug);
   if (!found) notFound();
-  const { site, count, badge } = found;
+  const { site, count, badge, topRank } = found;
   const d = site.data || {};
   const ld = {
     '@context': 'https://schema.org', '@type': 'LocalBusiness', name: d.businessName, description: d.tagline,
@@ -48,7 +51,7 @@ export default async function SitePage({ params }) {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
-      <SiteRenderer slug={site.slug} template={site.template} data={publicData(site.data)} payOnline={!!providerForSite(site)} bookingCount={count} showBadge={badge} />
+      <SiteRenderer slug={site.slug} template={site.template} data={publicData(site.data)} payOnline={!!providerForSite(site)} bookingCount={count} showBadge={badge} topRank={topRank} />
     </>
   );
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { getTop } from '@/lib/leaderboard';
 
 export const runtime = 'nodejs';
 
@@ -31,6 +32,8 @@ export async function GET(req) {
       limit 13 offset ${page * 12}`;
 
     const hasMore = rows.length > 12;
+    let topRank = new Map();
+    try { topRank = new Map((await getTop(5)).map((t) => [t.slug, t.rank])); } catch {}
     const items = rows.slice(0, 12).map((r) => {
       const svc = (Array.isArray(r.services) ? r.services : []).filter((x) => x && x.name);
       const prices = svc.map((x) => Number(x.price)).filter((n) => n > 0);
@@ -45,11 +48,13 @@ export async function GET(req) {
         services: svc.slice(0, 3).map((x) => String(x.name)),
         fromPrice: prices.length ? Math.min(...prices) : null,
         bookings: r.bookings,
+        top: topRank.get(r.slug) || 0,
         // Only normal web images. Embedded images can be huge and are skipped here.
         hero: typeof r.hero === 'string' && /^https:\/\//i.test(r.hero) ? r.hero : '',
       };
     });
 
+    items.sort((a, b) => (a.top ? a.top : 99) - (b.top ? b.top : 99));
     const countries = await sql`select case when upper(u.country) = 'UK' then 'GB' else upper(u.country) end as code, count(*)::int as n
       from sites s join users u on u.id::text = s.owner_id::text
       where s.published and coalesce(u.suspended, false) = false and u.country is not null and u.country <> ''

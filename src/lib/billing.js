@@ -30,6 +30,22 @@ export function priceFor(region, plan, cycle) {
   };
 }
 
+// Referral reward: when a referred business pays for the first time, the person who referred them gets one free month
+// of Professional (up to 12 a year). Safe to call twice, because each referral is rewarded only once.
+async function rewardReferrer(refereeId) {
+  try {
+    const [r] = await sql`update referrals set rewarded_at = now() where referee_user_id = ${String(refereeId)} and rewarded_at is null returning referrer_user_id`;
+    if (!r) return;
+    const [c] = await sql`select count(*)::int as n from referrals where referrer_user_id = ${r.referrer_user_id} and rewarded_at is not null`;
+    if (c.n > 12) return;
+    await sql`insert into seller_plans (user_id, plan, cycle, status, provider, currency, amount, expires_at, updated_at)
+      values (${r.referrer_user_id}, 'pro', 'monthly', 'active', 'referral', 'GBP', 0, now() + interval '1 month', now())
+      on conflict (user_id) do update set status = 'active',
+        plan = case when seller_plans.plan = 'biz' and coalesce(seller_plans.expires_at, now()) > now() then 'biz' else 'pro' end,
+        expires_at = greatest(coalesce(seller_plans.expires_at, now()), now()) + interval '1 month', updated_at = now()`;
+  } catch (e) { console.error('REFERRAL_REWARD_FAULT:', e); }
+}
+
 async function activate(row, provider, subId) {
   const months = row.cycle === 'yearly' ? 12 : 1;
   await sql`insert into seller_plans (user_id, plan, cycle, status, provider, currency, amount, stripe_subscription_id, expires_at, updated_at)
@@ -37,6 +53,7 @@ async function activate(row, provider, subId) {
     on conflict (user_id) do update set plan = excluded.plan, cycle = excluded.cycle, status = 'active', provider = excluded.provider,
       currency = excluded.currency, amount = excluded.amount, stripe_subscription_id = excluded.stripe_subscription_id,
       expires_at = greatest(coalesce(seller_plans.expires_at, now()), now()) + (${months}::int * interval '1 month'), updated_at = now()`;
+  await rewardReferrer(row.user_id);
 }
 
 // Called by return pages and webhooks. Safe to call many times for the same reference.

@@ -31,7 +31,7 @@ function useCountUp(target, run) {
   return v;
 }
 
-export default function SiteRenderer({ slug, template = 'classic', data, preview = false, payOnline = false, bookingCount = 0, showBadge = false }) {
+export default function SiteRenderer({ slug, template = 'classic', data, preview = false, payOnline = false, bookingCount = 0, showBadge = false, topRank = 0 }) {
   const t = T[template] || T.classic;
   const a = data.accent || '#2563eb';
   const root = useRef(null);
@@ -299,6 +299,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       <style>{css}</style>
 
       {depositBanner && <div style={{ background: depositBanner === 'ok' ? '#059669' : '#d97706', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L(depositBanner === 'ok' ? 'depositOk' : 'depositFail')}</div>}
+      {topRank > 0 && <div style={{ background: '#111827', color: '#fcd34d', textAlign: 'center', padding: '8px 16px', fontWeight: 700, fontSize: 13 }}>🏆 Top {topRank <= 3 ? `#${topRank}` : '5'} business on GNIS this month</div>}
       {data.announcement && <div style={{ background: a, color: '#fff', textAlign: 'center', padding: '10px 16px', fontWeight: 600, fontSize: 14 }}>{data.announcement}</div>}
       {giftBanner && <div style={{ background: giftBanner === 'ok' ? '#059669' : '#d97706', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L(giftBanner === 'ok' ? 'giftOk' : 'giftFail')}</div>}
       {paidBanner && <div style={{ background: '#059669', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L('paidOk')}</div>}
