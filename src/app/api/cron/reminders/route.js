@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { sendReminder } from '@/lib/notify';
 import { planOfUser, limitsFor } from '@/lib/plans';
+import { runRebook } from '@/lib/rebook';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,7 +30,9 @@ export async function GET(req) {
         sent++;
       } catch (e) { console.error('REMINDER_FAULT:', e); }
     }
-    return NextResponse.json({ ok: true, found: rows.length, sent });
+    let rebook = { sent: 0 };
+    try { rebook = await runRebook(); } catch (e) { console.error('REBOOK_FAULT:', e); }
+    return NextResponse.json({ ok: true, found: rows.length, sent, rebook });
   } catch (e) {
     console.error('CRON_REMINDERS_FAULT:', e);
     return NextResponse.json({ ok: false }, { status: 500 });

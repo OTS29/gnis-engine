@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { getStripe } from '@/lib/stripe';
 import { settlePlan } from '@/lib/billing';
+import { activateGift } from '@/lib/giftcards';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +18,7 @@ export async function POST(req) {
     if (event.type === 'checkout.session.completed') {
       if (o.metadata?.order_id) await sql`update site_orders set status = 'paid' where id = ${o.metadata.order_id}`;
       if (o.metadata?.kind === 'deposit' && o.metadata?.booking_id) await sql`update site_bookings set deposit_paid = true where id = ${o.metadata.booking_id}`;
+      if (o.metadata?.kind === 'giftcard' && o.metadata?.card_id && o.payment_status === 'paid') await activateGift(o.metadata.card_id);
       if (o.metadata?.kind === 'plan' && o.metadata?.ref) await settlePlan(o.metadata.ref, 'stripe', { trusted: true, subId: o.subscription || null });
     }
 

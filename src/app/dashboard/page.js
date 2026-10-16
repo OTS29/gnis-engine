@@ -12,7 +12,9 @@ const TABS = [
   { id: 'gallery', l: 'Gallery' },
   { id: 'analytics', l: 'Analytics' },
   { id: 'bookings', l: 'Bookings' },
+  { id: 'customers', l: 'Customers' },
   { id: 'orders', l: 'Orders' },
+  { id: 'giftcards', l: 'Gift cards' },
   { id: 'staff', l: 'Staff' },
   { id: 'growth', l: 'Growth' },
   { id: 'payments', l: 'Payments' },
@@ -100,6 +102,11 @@ export default function Dashboard() {
   const [stripeCountry, setStripeCountry] = useState('GB');
   const [billing, setBilling] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [customers, setCustomers] = useState(null);
+  const [custQ, setCustQ] = useState('');
+  const [custMsg, setCustMsg] = useState('');
+  const [cards, setCards] = useState(null);
+  const [redeem, setRedeem] = useState({ code: '', amount: '', msg: '', ok: false, balance: null, busy: false });
   const [plan, setPlan] = useState('starter');
   const [cycle, setCycle] = useState('monthly');
   const [billMsg, setBillMsg] = useState('');
@@ -151,12 +158,7 @@ export default function Dashboard() {
     (async () => {
       try {
         const r = await fetch('/api/site');
-        if (r.status === 401) {
-          // Signed in but not a professional (a client account)? Send them to their own page instead of the home page.
-          const me = await getJson('/api/users/get');
-          window.location.href = me?.ok && me.data?.role === 'client' ? '/portal/bookings' : '/';
-          return;
-        }
+        if (r.status === 401) { window.location.href = '/'; return; }
         const j = await r.json();
         if (j.plan) setPlan(j.plan);
         if (j.data) { setTemplate(j.data.template || 'classic'); setData(mergeData(j.data.data)); setSlug(j.data.slug); }
@@ -180,6 +182,12 @@ export default function Dashboard() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!slug) return;
+    if (tab === 'customers' && customers === null) getJson('/api/site/customers').then((j) => setCustomers(j.ok ? j.data : []));
+    if (tab === 'giftcards' && cards === null) getJson('/api/site/giftcards').then((j) => setCards(j.ok ? j.data : []));
+  }, [tab, slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const cur = data.currency || 'GBP';
   const sym = (formatMoney(0, cur, data.language || 'en').replace(/[0-9.,\s]/g, '')) || cur;
   const CC = { GBP: '44', NGN: '234', GHS: '233', KES: '254', ZAR: '27', USD: '1', CAD: '1', AUD: '61', EUR: '353' };
@@ -198,6 +206,37 @@ export default function Dashboard() {
   };
   const fm = (n) => formatMoney(Math.round((Number(n) || 0) * 100) / 100, cur, data.language || 'en');
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }));
+  const saveCustomer = async (c, patch) => {
+    setCustomers((list) => list.map((x) => (x.k === c.k ? { ...x, ...patch } : x)));
+    const j = await sendJson('/api/site/customers', 'PUT', { key: c.k, ...patch });
+    setCustMsg(j.ok ? 'Saved' : (j.error || 'Could not save'));
+    setTimeout(() => setCustMsg(''), 1800);
+  };
+  const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const downloadCustomers = () => {
+    const head = ['Name', 'Contact', 'Bookings', 'Completed', 'No-shows', 'Spent', 'Last visit', 'Next booking', 'Notes'];
+    const lines = [head.map(csvCell).join(',')].concat((customers || []).map((c) => [c.name, c.contact, c.bookings, c.completed, c.no_shows, c.spent, c.last_visit || '', c.next_booking || '', c.notes].map(csvCell).join(',')));
+    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'customers.csv'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  const rebookLink = (c) => {
+    const raw = String(c.contact || '');
+    if (raw.includes('@')) return `mailto:${raw}?subject=${encodeURIComponent(`Time to book again? ${data.businessName}`)}`;
+    let d = raw.replace(/[^\d+]/g, '');
+    if (d.startsWith('+')) d = d.slice(1); else if (d.startsWith('00')) d = d.slice(2); else if (d.startsWith('0')) d = (CC[cur] || '44') + d.slice(1);
+    if (!/^\d{10,15}$/.test(d)) return null;
+    return `https://wa.me/${d}?text=${encodeURIComponent(`Hi ${c.name}, it has been a while since your ${c.last_service || 'visit'} with ${data.businessName}. Would you like to book again?`)}`;
+  };
+  const runRedeem = async (use) => {
+    setRedeem((r) => ({ ...r, busy: true, msg: '' }));
+    const j = await sendJson('/api/site/giftcards', 'POST', use ? { code: redeem.code, amount: redeem.amount } : { code: redeem.code });
+    if (j.ok) {
+      setRedeem((r) => ({ ...r, busy: false, ok: true, balance: j.balance, amount: '', msg: use ? `Used ${fm(j.used)}. ${fm(j.balance)} left on the card.` : `Balance: ${fm(j.balance)}` }));
+      if (use) getJson('/api/site/giftcards').then((x) => setCards(x.ok ? x.data : []));
+    } else setRedeem((r) => ({ ...r, busy: false, ok: false, balance: null, msg: j.error || 'Something went wrong' }));
+  };
   const setItem = (k, i, patch) => setData((d) => ({ ...d, [k]: d[k].map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
   const addItem = (k, item) => setData((d) => ({ ...d, [k]: [...d[k], item] }));
   const delItem = (k, i) => setData((d) => ({ ...d, [k]: d[k].filter((_, j) => j !== i) }));
@@ -391,6 +430,21 @@ export default function Dashboard() {
               </label>
               <p style={{ fontSize: 12, color: '#6b7280', margin: '0' }}>Automatic WhatsApp needs a Twilio WhatsApp number set up by the platform owner. On every plan you can message a customer yourself with the WhatsApp button on the Bookings tab.</p>
             </div>
+            <div style={box}>
+              <strong>Bring customers back and sell gift cards</strong>
+              {plan === 'starter' && (
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>These are Professional plan features. <button type="button" style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0, fontSize: 12, textDecoration: 'underline' }} onClick={() => setTab('billing')}>See plans</button></p>
+              )}
+              <span style={lbl}>Automatically email customers to book again after their last completed visit</span>
+              <select style={inp} disabled={plan === 'starter'} value={Number(data.rebookDays) || 0} onChange={(e) => set('rebookDays', Number(e.target.value))}>
+                {[0, 14, 21, 28, 42, 56, 90].map((n) => (<option key={n} value={n}>{n === 0 ? 'Off' : `After ${n} days`}</option>))}
+              </select>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 10px' }}>Only customers who gave an email, whose visit you marked Completed, and who have nothing booked. Each email has a stop link. You can switch off one customer on the Customers tab.</p>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, marginBottom: 4, opacity: plan === 'starter' ? 0.5 : 1 }}>
+                <input type="checkbox" disabled={plan === 'starter'} checked={!!data.giftCards} onChange={(e) => set('giftCards', e.target.checked)} /> Sell gift cards on my site
+              </label>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Needs card payments connected in the Payments tab. The money goes to you like any other payment.</p>
+            </div>
           </>)}
 
           {tab === 'services' && (<>
@@ -507,6 +561,68 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
+          </>)}
+
+          {tab === 'customers' && (!slug ? needSave : customers === null ? <div style={box}>Loading customers…</div> : <>
+            <div style={{ ...box, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <span style={{ fontSize: 14 }}>{customers.length} customers · {customers.filter((c) => c.completed >= 3).length} regulars · {fm(customers.reduce((t, c) => t + c.spent, 0))} from completed visits</span>
+              <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{custMsg && <span style={{ fontSize: 12, color: '#059669' }}>{custMsg}</span>}<button style={btn('#059669')} onClick={downloadCustomers}>Download</button></span>
+            </div>
+            <input style={inp} placeholder="Search by name or contact" value={custQ} onChange={(e) => setCustQ(e.target.value)} />
+            {customers.length === 0 && <div style={box}>No customers yet. People appear here after their first booking. Mark visits as Completed on the Bookings tab so spending and regulars are counted.</div>}
+            {customers.filter((c) => !custQ || `${c.name} ${c.contact}`.toLowerCase().includes(custQ.toLowerCase())).map((c) => {
+              const tag = c.completed >= 3 ? ['Regular', '#059669'] : c.bookings === 1 ? ['New', '#2563eb'] : null;
+              const link = rebookLink(c);
+              return (
+                <div key={c.k} style={box}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontWeight: 600 }}>
+                    <span>{c.name}{tag && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: tag[1], border: `1px solid ${tag[1]}`, padding: '1px 8px', borderRadius: 999 }}>{tag[0]}</span>}</span>
+                    <span>{fm(c.spent)}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>{c.contact}</div>
+                  <div style={{ fontSize: 13, color: '#374151', margin: '4px 0 8px' }}>
+                    {c.bookings} booking{c.bookings === 1 ? '' : 's'} · {c.completed} completed{c.no_shows > 0 ? ` · ${c.no_shows} no-show${c.no_shows === 1 ? '' : 's'}` : ''}
+                    {c.last_visit ? ` · last visit ${c.last_visit}` : ''}{c.next_booking ? ` · next ${c.next_booking}` : ''}
+                  </div>
+                  <textarea style={{ ...inp, minHeight: 56, resize: 'vertical' }} placeholder="Private notes (preferences, allergies, what they like)" defaultValue={c.notes} onBlur={(e) => { if (e.target.value !== c.notes) saveCustomer(c, { notes: e.target.value }); }} />
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {link && <a href={link} target="_blank" rel="noreferrer" style={{ ...sm(String(c.contact).includes('@') ? '#2563eb' : '#25d366'), textDecoration: 'none' }}>{String(c.contact).includes('@') ? 'Email them' : 'WhatsApp them'}</a>}
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: '#6b7280' }}>
+                      <input type="checkbox" checked={!!c.optout} onChange={(e) => saveCustomer(c, { optout: e.target.checked })} /> Do not send automatic reminders
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </>)}
+
+          {tab === 'giftcards' && (!slug ? needSave : <>
+            {plan === 'starter' && <div style={box}>Gift cards are a Professional plan feature. <button type="button" style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0, textDecoration: 'underline' }} onClick={() => setTab('billing')}>See plans</button></div>}
+            {!data.giftCards && plan !== 'starter' && <div style={box}>Gift cards are switched off. Turn them on in the Design tab under “Bring customers back and sell gift cards”, then press Save.</div>}
+            <div style={box}>
+              <strong>Customer paying with a gift card?</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 8px' }}>Type the code they show you, check the balance, then take off what they spend.</p>
+              <input style={inp} placeholder="Code, like AB3D-7KQ2" value={redeem.code} onChange={(e) => setRedeem({ ...redeem, code: e.target.value.toUpperCase(), msg: '', balance: null })} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button style={btn('#374151')} disabled={redeem.busy || !redeem.code} onClick={() => runRedeem(false)}>Check balance</button>
+                {redeem.balance !== null && <>
+                  <input style={{ ...inp, width: 140, marginBottom: 0 }} type="number" min="0" step="0.01" placeholder={`Use (${sym})`} value={redeem.amount} onChange={(e) => setRedeem({ ...redeem, amount: e.target.value })} />
+                  <button style={btn('#059669')} disabled={redeem.busy || !redeem.amount} onClick={() => runRedeem(true)}>Use this amount</button>
+                </>}
+              </div>
+              {redeem.msg && <p style={{ fontSize: 14, margin: '10px 0 0', color: redeem.ok ? '#059669' : '#dc2626' }}>{redeem.msg}</p>}
+            </div>
+            {cards === null ? <div style={box}>Loading gift cards…</div> : cards.length === 0 ? <div style={box}>No gift cards sold yet.</div> : (
+              <div style={box}>
+                <strong>{cards.length} sold · {fm(cards.reduce((t, c) => t + c.amount, 0))} · {fm(cards.reduce((t, c) => t + c.balance, 0))} still to be used</strong>
+                {cards.map((c) => (
+                  <div key={c.id} style={{ borderTop: '1px solid #f3f4f6', marginTop: 10, paddingTop: 10, fontSize: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}><span style={{ letterSpacing: 1 }}>{c.code}</span><span>{fm(c.balance)} / {fm(c.amount)}</span></div>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>Bought by {c.buyer_name} ({c.buyer_email}) on {c.created}{c.recipient_name ? ` for ${c.recipient_name}` : ''}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </>)}
 
           {tab === 'orders' && (<>

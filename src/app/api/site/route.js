@@ -52,6 +52,8 @@ export async function PUT(req) {
     }
     if (!lim.deposits) data.depositPercent = 0;
     if (!lim.whatsappAuto) data.whatsappReminders = false;
+    if (!lim.giftCards) data.giftCards = false;
+    if (!lim.rebook) data.rebookDays = 0;
     const json2 = JSON.stringify(data);
 
     if (existing) {

@@ -13,11 +13,17 @@ export async function GET(req) {
   const provider = u.searchParams.get('p') === 'flutterwave' ? 'flutterwave' : 'paystack';
   const orderId = parseInt(u.searchParams.get('o') || '', 10);
   const planRef = u.searchParams.get('plan') || '';
+  const giftId = parseInt(u.searchParams.get('g') || '', 10);
   const depositId = parseInt(u.searchParams.get('d') || '', 10);
   try {
     if (planRef) {
       const ok = await settleAny(planRef, provider);
       return NextResponse.redirect(`${base}/dashboard?tab=billing&plan=${ok ? 'done' : 'failed'}`);
+    }
+    if (giftId) {
+      const [g] = await sql`select pay_ref from gift_cards where id = ${giftId}`;
+      const ok = g?.pay_ref ? await settleAny(g.pay_ref, provider) : false;
+      return NextResponse.redirect(`${base}/site/${slug}?gift=${ok ? '1' : '0'}`);
     }
     if (depositId) {
       const [b] = await sql`select pay_ref from site_bookings where id = ${depositId}`;

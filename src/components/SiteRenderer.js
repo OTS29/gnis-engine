@@ -58,6 +58,10 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
   const [shop, setShop] = useState({ busy: false, msg: '', ok: false });
   const [paidBanner, setPaidBanner] = useState(false);
   const [depositBanner, setDepositBanner] = useState('');
+  const [giftBanner, setGiftBanner] = useState('');
+  const [gift, setGift] = useState({ amount: '', buyerName: '', buyerEmail: '', recipientName: '', recipientEmail: '', message: '', busy: false, msg: '' });
+  const GIFT_MIN = { GBP: 5, EUR: 5, USD: 5, CAD: 5, AUD: 5, CHF: 5, NGN: 2000, GHS: 30, KES: 500, ZAR: 80 };
+  const giftMin = GIFT_MIN[String(cur).toUpperCase()] || 5;
 
   const count = useCountUp(bookingCount, ready);
 
@@ -66,6 +70,8 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
     if (new URLSearchParams(window.location.search).get('paid') === '1') setPaidBanner(true);
     const dp = new URLSearchParams(window.location.search).get('deposit');
     if (dp === '1' || dp === '0') setDepositBanner(dp === '1' ? 'ok' : 'fail');
+    const gp = new URLSearchParams(window.location.search).get('gift');
+    if (gp === '1' || gp === '0') setGiftBanner(gp === '1' ? 'ok' : 'fail');
   }, []);
 
   // scroll-reveal animations (content stays visible if JS is unavailable)
@@ -155,6 +161,18 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
         setChat([]); setNeg({ state: null, busy: false, lock: null, open: false });
       } else setState({ busy: false, ok: false, msg: j.error || 'Something went wrong' });
     } catch { setState({ busy: false, ok: false, msg: 'Network error. Try again.' }); }
+  };
+
+  const buyGift = async (e) => {
+    e.preventDefault();
+    if (preview) { setGift((g) => ({ ...g, msg: 'Preview only. Gift cards work on your live site.' })); return; }
+    setGift((g) => ({ ...g, busy: true, msg: '' }));
+    try {
+      const r = await fetch('/api/site/giftcard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug, ...gift }) });
+      const j = await r.json();
+      if (j.ok && j.payUrl) { window.location.href = j.payUrl; return; }
+      setGift((g) => ({ ...g, busy: false, msg: j.error || 'Something went wrong' }));
+    } catch { setGift((g) => ({ ...g, busy: false, msg: 'Network error. Try again.' })); }
   };
 
   const checkout = async () => {
@@ -268,6 +286,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       <style>{css}</style>
 
       {depositBanner && <div style={{ background: depositBanner === 'ok' ? '#059669' : '#d97706', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L(depositBanner === 'ok' ? 'depositOk' : 'depositFail')}</div>}
+      {giftBanner && <div style={{ background: giftBanner === 'ok' ? '#059669' : '#d97706', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L(giftBanner === 'ok' ? 'giftOk' : 'giftFail')}</div>}
       {paidBanner && <div style={{ background: '#059669', color: '#fff', textAlign: 'center', padding: 12, fontWeight: 600 }}>{L('paidOk')}</div>}
 
       <nav className="sr-nav" style={{ background: t.nav, color: t.navFg, boxShadow: scrolled ? '0 4px 24px rgba(0,0,0,.12)' : 'none', borderBottom: `1px solid ${scrolled ? t.line : 'transparent'}` }}>
@@ -470,6 +489,28 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
           </form>
         </div>
       </section>
+
+      {data.giftCards && (payOnline || preview) && (
+        <section data-sec="gifts" className="sr-sec" style={{ background: t.alt }}>
+          <div className="sr-wrap sr-split">
+            <div>
+              <h2 className="sr-h2 sr-reveal">{L('giftTitle')}</h2>
+              <p className="sr-sub sr-reveal sr-d1">{L('giftSub')}</p>
+              <p className="sr-reveal sr-d2" style={{ color: t.mute, fontSize: 14 }}>{L('giftRange', { min: money(giftMin), max: money(giftMin * 200) })}</p>
+            </div>
+            <form onSubmit={buyGift} className="sr-card sr-reveal sr-d1" style={{ display: 'grid', gap: 12 }}>
+              <input className={input} type="number" required min={giftMin} max={giftMin * 200} step="0.01" placeholder={`${L('giftAmount')} (${cur})`} value={gift.amount} onChange={(e) => setGift({ ...gift, amount: e.target.value })} />
+              <input className={input} placeholder={L('giftYourName')} required value={gift.buyerName} onChange={(e) => setGift({ ...gift, buyerName: e.target.value })} />
+              <input className={input} type="email" placeholder={L('giftYourEmail')} required value={gift.buyerEmail} onChange={(e) => setGift({ ...gift, buyerEmail: e.target.value })} />
+              <input className={input} placeholder={L('giftToName')} value={gift.recipientName} onChange={(e) => setGift({ ...gift, recipientName: e.target.value })} />
+              <input className={input} type="email" placeholder={L('giftToEmail')} value={gift.recipientEmail} onChange={(e) => setGift({ ...gift, recipientEmail: e.target.value })} />
+              <input className={input} maxLength={300} placeholder={L('giftMessage')} value={gift.message} onChange={(e) => setGift({ ...gift, message: e.target.value })} />
+              <button className="sr-btn" disabled={gift.busy}>{gift.busy ? L('pleaseWait') : L('giftBuy')}</button>
+              {gift.msg && <div style={{ fontSize: 14, color: '#dc2626' }}>{gift.msg}</div>}
+            </form>
+          </div>
+        </section>
+      )}
 
       <footer data-sec="contact" style={{ background: t.foot, color: t.footFg, padding: 'clamp(48px,7vw,88px) 0 28px' }}>
         <div className="sr-wrap">

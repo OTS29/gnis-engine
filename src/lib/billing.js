@@ -1,5 +1,6 @@
 import { sql } from '@/lib/db';
 import { PLANS, planPrices, REGIONS, regionFor, AFRICA } from '@/lib/regions';
+import { activateGift } from '@/lib/giftcards';
 import { verifyPayment, paystackOn, flutterwaveOn, stripeOn } from '@/lib/payments';
 
 export const PLAN_NAMES = { pro: 'Professional', biz: 'Business' };
@@ -73,9 +74,20 @@ export async function settleDeposit(ref, provider) {
   return true;
 }
 
+export async function settleGift(ref, provider) {
+  const [c] = await sql`select id, status, amount::float8 as amt, currency from gift_cards where pay_ref = ${ref}`;
+  if (!c) return false;
+  if (c.status !== 'pending') return true;
+  const v = await verifyPayment(provider, ref);
+  if (!v.paid || v.currency !== String(c.currency).toUpperCase() || v.amount + 0.01 < c.amt) return false;
+  await activateGift(c.id);
+  return true;
+}
+
 export const settleAny = (ref, provider) => {
   const r = String(ref);
   if (r.startsWith('gnis-p')) return settlePlan(ref, provider);
   if (r.startsWith('gnis-d')) return settleDeposit(ref, provider);
+  if (r.startsWith('gnis-g')) return settleGift(ref, provider);
   return settleOrder(ref, provider);
 };
