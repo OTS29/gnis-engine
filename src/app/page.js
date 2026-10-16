@@ -121,6 +121,70 @@ export default function LandingPage() {
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
 
+  // Live numbers and the real business directory
+  const [stats, setStats] = useState(null);
+  const [shown, setShown] = useState({ businesses: 0, users: 0, bookings: 0, today: 0 });
+  const [dir, setDir] = useState({ items: [], countries: [], hasMore: false, loading: true });
+  const [dirQ, setDirQ] = useState('');
+  const [dirQLive, setDirQLive] = useState('');
+  const [dirCountry, setDirCountry] = useState('');
+  const [dirPage, setDirPage] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try { const j = await (await fetch('/api/public/stats')).json(); if (alive && j.ok) setStats(j); } catch {}
+    };
+    load();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  // Numbers count up smoothly to the latest real value, and move again when a new business joins.
+  useEffect(() => {
+    if (!stats) return;
+    let raf;
+    const from = shown;
+    const to = { businesses: stats.businesses, users: stats.users, bookings: stats.bookings, today: stats.today };
+    const start = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / 900);
+      const e = 1 - Math.pow(1 - k, 3);
+      setShown({
+        businesses: Math.round(from.businesses + (to.businesses - from.businesses) * e),
+        users: Math.round(from.users + (to.users - from.users) * e),
+        bookings: Math.round(from.bookings + (to.bookings - from.bookings) * e),
+        today: Math.round(from.today + (to.today - from.today) * e),
+      });
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [stats]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { const t = setTimeout(() => { setDirQ(dirQLive.trim()); setDirPage(0); }, 350); return () => clearTimeout(t); }, [dirQLive]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setDir((d) => ({ ...d, loading: true }));
+      try {
+        const j = await (await fetch(`/api/public/directory?q=${encodeURIComponent(dirQ)}&country=${encodeURIComponent(dirCountry)}&page=${dirPage}`)).json();
+        if (!alive) return;
+        setDir((d) => ({ items: dirPage > 0 ? [...d.items, ...(j.items || [])] : (j.items || []), countries: j.countries || d.countries, hasMore: !!j.hasMore, loading: false }));
+      } catch { if (alive) setDir((d) => ({ ...d, loading: false })); }
+    })();
+    return () => { alive = false; };
+  }, [dirQ, dirCountry, dirPage]);
+
+  const countryName = (code) => { try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code; } catch { return code; } };
+  const goSearch = (e) => {
+    if (e) e.preventDefault();
+    setDirQ(dirQLive.trim()); setDirPage(0);
+    const el = document.getElementById('marketplace-feed');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   useEffect(() => {
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
@@ -425,6 +489,38 @@ export default function LandingPage() {
             Find a professional
           </a>
         </div>
+
+        <form onSubmit={goSearch} className="mt-8 max-w-2xl mx-auto bg-slate-900/80 border border-slate-800 rounded-2xl p-1.5 flex items-center gap-1.5 shadow-xl focus-within:ring-2 focus-within:ring-green-500/40">
+          <input
+            type="search"
+            value={dirQLive}
+            onChange={(e) => setDirQLive(e.target.value)}
+            placeholder="Search a business, a service or a place"
+            aria-label="Search businesses"
+            className="bg-transparent flex-1 min-w-0 px-4 py-3 text-sm font-semibold outline-none text-white placeholder:text-slate-500"
+          />
+          <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-5 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest transition shrink-0">Search</button>
+        </form>
+
+        {stats && (
+          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto text-left">
+            {[
+              ['Businesses', shown.businesses],
+              ['People on GNIS', shown.users],
+              ['Bookings made', shown.bookings],
+              ['Booked today', shown.today],
+            ].map(([label, n]) => (
+              <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+                <div className="text-2xl sm:text-3xl font-black tracking-tight text-white tabular-nums">{n.toLocaleString('en-GB')}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-0.5 flex items-center gap-1.5">
+                  {label === 'Booked today' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {stats && <p className="mt-3 text-[10px] font-mono uppercase tracking-widest text-slate-500">Live numbers. Updated automatically.</p>}
       </header>
 
       {/* --- WHO IT'S FOR --- */}
@@ -551,72 +647,72 @@ export default function LandingPage() {
       </section>
 
       {/* --- MARKETPLACE --- */}
-      <section id="marketplace-feed" className="max-w-6xl mx-auto py-12 px-5 sm:px-6 border-t border-slate-900">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+      <section id="marketplace-feed" className="max-w-6xl mx-auto py-14 px-5 sm:px-6 border-t border-slate-900">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6">
           <div>
-            <p className="text-green-500 font-black text-[10px] uppercase tracking-widest mb-2">Marketplace preview</p>
-            <h3 className="text-3xl sm:text-4xl font-black italic tracking-tighter uppercase">Find a professional</h3>
-            <p className="text-xs text-slate-500 mt-2">Sample listings shown. Real profiles appear as professionals join.</p>
+            <p className="text-green-500 font-black text-[10px] uppercase tracking-widest mb-2">Directory</p>
+            <h3 className="text-3xl sm:text-4xl font-black italic tracking-tighter uppercase">Find a business on GNIS</h3>
+            <p className="text-xs text-slate-500 mt-2">Real businesses with their own booking page. Search by name, service or place.</p>
           </div>
-
           <div className="bg-slate-900 p-1.5 rounded-2xl flex items-center border border-slate-800 shadow-xl focus-within:ring-2 focus-within:ring-green-500/30 w-full max-w-sm transition-all">
             <input
-              type="text"
-              placeholder="Skill, postcode area or name..."
+              type="search"
+              placeholder="Name, service or place..."
+              aria-label="Search the directory"
               className="bg-transparent px-4 py-2 text-xs font-bold outline-none text-white w-full placeholder:text-slate-600"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={dirQLive}
+              onChange={(e) => setDirQLive(e.target.value)}
             />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="text-slate-500 hover:text-white text-[10px] font-mono px-2">✕</button>
-            )}
+            {dirQLive && (<button onClick={() => setDirQLive('')} className="text-slate-500 hover:text-white text-[10px] font-mono px-2">✕</button>)}
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-4 scrollbar-hide">
-          {CATEGORIES.map(c => (
-            <button
-              key={c}
-              onClick={() => setActiveCategory(c)}
-              className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider border transition ${activeCategory === c ? 'bg-green-600 border-green-500 text-white' : 'border-slate-800 text-slate-400 hover:border-slate-600'}`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="bg-slate-900/30 rounded-[2rem] p-10 text-center border border-slate-800 max-w-xl mx-auto">
-            <p className="text-xl font-black italic text-slate-400 mb-2 uppercase tracking-tight">No matches yet</p>
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider mb-6">Nothing found for "{searchQuery}" in {activeCategory}</p>
-            <button onClick={() => openRegister('pro')} className="bg-green-600 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-500 transition">
-              List your service here
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map(pro => (
-              <div key={pro.id} className="bg-slate-900/60 p-6 sm:p-8 rounded-[2rem] border border-slate-900 hover:border-green-500/30 transition-all flex flex-col justify-between min-h-[220px]">
-                <div>
-                  <div className="flex justify-between items-start gap-2">
-                    <h4 className="text-xl font-black tracking-tight text-white">{pro.name}</h4>
-                    <span className="text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded tracking-widest bg-green-500/10 text-green-400 border border-green-500/20 shrink-0">
-                      {pro.availability}
-                    </span>
-                  </div>
-                  <p className="text-slate-400 text-xs font-black uppercase tracking-wider mt-1">📍 {pro.area} • {pro.skill}</p>
-                  <p className="text-[10px] text-green-500/80 font-mono mt-1">{pro.category}</p>
-                </div>
-
-                <div className="flex justify-between items-center pt-4 border-t border-slate-800/50 mt-6">
-                  <p className="text-lg font-black tracking-tight text-white">{pro.rate}</p>
-                  <button onClick={() => alert('Booking opens soon. Create a free account to be notified.')} className="bg-white text-black px-5 py-2.5 rounded-xl text-[10px] font-black uppercase hover:bg-green-600 hover:text-white transition tracking-wider">
-                    Book
-                  </button>
-                </div>
-              </div>
+        {dir.countries.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide">
+            <button onClick={() => { setDirCountry(''); setDirPage(0); }} className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider border transition ${dirCountry === '' ? 'bg-green-600 border-green-500 text-white' : 'border-slate-800 text-slate-400 hover:border-green-500'}`}>All places</button>
+            {dir.countries.map((c) => (
+              <button key={c.code} onClick={() => { setDirCountry(c.code); setDirPage(0); }} className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider border transition ${dirCountry === c.code ? 'bg-green-600 border-green-500 text-white' : 'border-slate-800 text-slate-400 hover:border-green-500'}`}>
+                {countryName(c.code)} · {c.n}
+              </button>
             ))}
           </div>
+        )}
+
+        {dir.loading && dir.items.length === 0 ? (
+          <p className="text-sm text-slate-500 py-10 text-center">Loading businesses…</p>
+        ) : dir.items.length === 0 ? (
+          <div className="bg-slate-900/30 rounded-[2rem] p-10 text-center border border-slate-800 max-w-xl mx-auto">
+            <p className="text-xl font-black italic text-slate-400 mb-2 uppercase tracking-tight">{dirQ || dirCountry ? 'No matches' : 'Be one of the first listed'}</p>
+            <p className="text-[11px] text-slate-500 font-bold tracking-wide mb-6">{dirQ || dirCountry ? 'Try a different word or place.' : 'Businesses appear here as soon as they publish their GNIS page.'}</p>
+            <button onClick={() => openRegister('pro')} className="bg-green-600 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-500 transition">List your business free</button>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {dir.items.map((b) => (
+                <a key={b.slug} href={`/site/${b.slug}`} className="group bg-slate-900/60 rounded-[2rem] border border-slate-900 hover:border-green-500/40 transition-all overflow-hidden flex flex-col">
+                  <div className="h-36 bg-gradient-to-br from-green-700/40 via-slate-800 to-slate-900 relative">
+                    {b.hero && <img src={b.hero} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition" />}
+                  </div>
+                  <div className="p-6 flex flex-col gap-2 flex-1">
+                    <h4 className="text-xl font-black tracking-tight text-white">{b.name}</h4>
+                    {b.location && <p className="text-slate-400 text-xs font-bold">📍 {b.location}</p>}
+                    {b.tagline && <p className="text-slate-300 text-sm">{b.tagline}</p>}
+                    {b.services.length > 0 && <p className="text-[11px] text-green-400/90 font-mono">{b.services.join(' · ')}</p>}
+                    <div className="mt-auto pt-4 flex items-center justify-between">
+                      <span className="text-sm font-black text-white">{b.fromPrice ? `From ${new Intl.NumberFormat('en-GB', { style: 'currency', currency: b.currency || 'GBP', maximumFractionDigits: 0 }).format(b.fromPrice)}` : ''}</span>
+                      <span className="bg-white text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase group-hover:bg-green-500 group-hover:text-white transition">View and book</span>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+            {dir.hasMore && (
+              <div className="text-center mt-8">
+                <button onClick={() => setDirPage((n) => n + 1)} disabled={dir.loading} className="border border-slate-700 px-8 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:border-green-500 transition">{dir.loading ? 'Loading…' : 'Show more'}</button>
+              </div>
+            )}
+          </>
         )}
       </section>
 
