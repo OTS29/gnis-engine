@@ -2,9 +2,9 @@ import { sql } from '@/lib/db';
 
 // What each plan allows. Limits only stop people ADDING more; nothing already saved is ever removed.
 export const LIMITS = {
-  starter: { services: 8, products: 8, gallery: 6, staff: 2, deposits: false, whatsappAuto: false, giftCards: false, rebook: false, badge: true },
-  pro: { services: 30, products: 30, gallery: 12, staff: 5, deposits: true, whatsappAuto: true, giftCards: true, rebook: true, badge: false },
-  biz: { services: 30, products: 30, gallery: 12, staff: 10, deposits: true, whatsappAuto: true, giftCards: true, rebook: true, badge: false },
+  starter: { services: 8, products: 8, gallery: 6, staff: 2, deposits: false, whatsappAuto: false, giftCards: false, rebook: false, loyalty: false, badge: true },
+  pro: { services: 30, products: 30, gallery: 12, staff: 5, deposits: true, whatsappAuto: true, giftCards: true, rebook: true, loyalty: true, badge: false },
+  biz: { services: 30, products: 30, gallery: 12, staff: 10, deposits: true, whatsappAuto: true, giftCards: true, rebook: true, loyalty: true, badge: false },
 };
 export const PLAN_LABEL = { starter: 'Starter', pro: 'Professional', biz: 'Business' };
 

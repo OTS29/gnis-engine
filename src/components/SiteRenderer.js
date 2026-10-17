@@ -31,7 +31,7 @@ function useCountUp(target, run) {
   return v;
 }
 
-export default function SiteRenderer({ slug, template = 'classic', data, preview = false, payOnline = false, bookingCount = 0, showBadge = false, topRank = 0 }) {
+export default function SiteRenderer({ slug, template = 'classic', data, preview = false, payOnline = false, bookingCount = 0, showBadge = false, topRank = 0, realReviews = [], ratingAvg = 0, ratingN = 0 }) {
   const t = T[template] || T.classic;
   const a = data.accent || '#2563eb';
   const root = useRef(null);
@@ -47,7 +47,7 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
   const [lightbox, setLightbox] = useState(null);
   const [ready, setReady] = useState(false);
 
-  const [form, setForm] = useState({ customer: '', contact: '', service: '', date: '', time: '' });
+  const [form, setForm] = useState({ customer: '', contact: '', service: '', date: '', time: '', giftCode: '' });
   const [state, setState] = useState({ busy: false, msg: '', ok: false });
   const [chat, setChat] = useState([]);
   const [offer, setOffer] = useState('');
@@ -156,8 +156,8 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
       const j = await r.json();
       if (j.ok && j.payUrl) { window.location.href = j.payUrl; return; }
       if (j.ok) {
-        setState({ busy: false, ok: true, msg: L('sentOk', { amt: money(j.price) }) });
-        setForm({ customer: '', contact: '', service: '', date: '', time: '' });
+        setState({ busy: false, ok: true, msg: L('sentOk', { amt: money(j.price) }) + (j.giftApplied > 0 ? L('giftUsedOk', { amt: money(j.giftApplied) }) : '') + (j.loyaltyPct > 0 ? L('loyaltyOk', { pct: j.loyaltyPct }) : '') });
+        setForm({ customer: '', contact: '', service: '', date: '', time: '', giftCode: '' });
         setChat([]); setNeg({ state: null, busy: false, lock: null, open: false });
       } else setState({ busy: false, ok: false, msg: j.error || 'Something went wrong' });
     } catch { setState({ busy: false, ok: false, msg: 'Network error. Try again.' }); }
@@ -433,12 +433,20 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
         </section>
       )}
 
-      {(data.reviews || []).length > 0 && (
+      {((data.reviews || []).length > 0 || realReviews.length > 0) && (
         <section data-sec="reviews" className="sr-sec" style={{ background: t.bg }}>
           <div className="sr-wrap">
             <h2 className="sr-h2 sr-reveal">{L('reviewsTitle')}</h2>
+            {ratingN > 0 && <p className="sr-sub sr-reveal" style={{ margin: '6px 0 0' }}><span style={{ color: '#f59e0b' }}>{'★'.repeat(Math.round(ratingAvg))}{'☆'.repeat(5 - Math.round(ratingAvg))}</span> {L('reviewsAvg', { avg: ratingAvg, n: ratingN })}</p>}
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', marginTop: 24 }}>
-              {data.reviews.map((r, i) => (
+              {realReviews.filter((r) => r.rating >= 1).map((r, i) => (
+                <div key={`rr${i}`} className="sr-card sr-reveal">
+                  <div style={{ color: '#f59e0b', marginBottom: 6 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</div>
+                  {r.text ? <p style={{ margin: '0 0 12px', fontSize: 16 }}>“{r.text}”</p> : null}
+                  <strong style={{ fontSize: 14 }}>{r.name}</strong> <span style={{ fontSize: 12, color: t.mute }}>· {L('verifiedVisit')}</span>
+                </div>
+              ))}
+              {(data.reviews || []).map((r, i) => (
                 <div key={i} className="sr-card sr-reveal">
                   <p style={{ margin: '0 0 12px', fontSize: 16 }}>“{r.text}”</p>
                   <strong style={{ fontSize: 14 }}>{r.name}</strong>
@@ -530,6 +538,12 @@ export default function SiteRenderer({ slug, template = 'classic', data, preview
                 <input className={`${input}${form.time ? ' sr-has' : ''}`} type="time" required data-ph={L('chooseTime')} value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
               </div>
             </div>
+            {(data.giftCards || data.loyaltyEvery > 1) && (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {data.giftCards && <input className={input} maxLength={12} placeholder={L('giftCodeLabel')} value={form.giftCode} onChange={(e) => setForm({ ...form, giftCode: e.target.value.toUpperCase() })} />}
+                {data.loyaltyEvery > 1 && <div style={{ fontSize: 13, color: t.mute }}>{L('loyaltyNote', { n: data.loyaltyEvery, pct: data.loyaltyPercent || 10 })}</div>}
+              </div>
+            )}
             {Number(data.depositPercent) > 0 && payOnline && selected && Number(locked?.price ?? selected.price) > 0 && (
               <div style={{ fontSize: 13, color: t.mute }}>{L('depositNote', { pct: data.depositPercent, amt: money((Number(locked?.price ?? selected.price) * Number(data.depositPercent)) / 100) })}</div>
             )}

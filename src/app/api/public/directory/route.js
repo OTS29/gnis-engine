@@ -19,7 +19,9 @@ export async function GET(req) {
         s.data->>'currency' as currency, s.data->>'hero' as hero,
         case when jsonb_typeof(s.data->'services') = 'array' then s.data->'services' else '[]'::jsonb end as services,
         u.skill, u.country,
-        (select count(*) from site_bookings b where b.site_id = s.id)::int as bookings
+        (select count(*) from site_bookings b where b.site_id = s.id and coalesce(b.source, 'website') <> 'import')::int as bookings,
+        (select avg(rating) from site_reviews r where r.site_id = s.id and not r.hidden)::float8 as rating,
+        (select count(*) from site_reviews r where r.site_id = s.id and not r.hidden)::int as rating_n
       from sites s join users u on u.id::text = s.owner_id::text
       where s.published and coalesce(u.suspended, false) = false
         and (${country} = '' or upper(coalesce(u.country, '')) = ${country}
@@ -49,6 +51,8 @@ export async function GET(req) {
         fromPrice: prices.length ? Math.min(...prices) : null,
         bookings: r.bookings,
         top: topRank.get(r.slug) || 0,
+        rating: r.rating_n >= 1 ? Math.round(r.rating * 10) / 10 : null,
+        ratingN: r.rating_n,
         // Only normal web images. Embedded images can be huge and are skipped here.
         hero: typeof r.hero === 'string' && /^https:\/\//i.test(r.hero) ? r.hero : '',
       };

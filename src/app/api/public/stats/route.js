@@ -15,7 +15,7 @@ export async function GET() {
     const [b] = await sql`select
         count(*)::int as bookings,
         count(*) filter (where (created_at at time zone 'Europe/London')::date = (now() at time zone 'Europe/London')::date)::int as today
-      from site_bookings`;
+      from site_bookings where coalesce(source, 'website') <> 'import'`;
     return NextResponse.json(
       { ok: true, businesses: u.businesses, users: u.users, countries: u.countries, liveSites: s.live_sites, bookings: b.bookings, today: b.today },
       { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } }

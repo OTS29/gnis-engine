@@ -11,8 +11,10 @@ const TABS = [
   { id: 'products', l: 'Products' },
   { id: 'gallery', l: 'Gallery' },
   { id: 'analytics', l: 'Analytics' },
+  { id: 'money', l: 'Money' },
   { id: 'bookings', l: 'Bookings' },
   { id: 'customers', l: 'Customers' },
+  { id: 'reviews', l: 'Reviews' },
   { id: 'orders', l: 'Orders' },
   { id: 'giftcards', l: 'Gift cards' },
   { id: 'staff', l: 'Staff' },
@@ -108,6 +110,10 @@ export default function Dashboard() {
   const [dueDays, setDueDays] = useState(0);
   const [showDue, setShowDue] = useState(true);
   const [cards, setCards] = useState(null);
+  const [money, setMoney] = useState(null);
+  const [reviews, setReviews] = useState(null);
+  const [staffFilter, setStaffFilter] = useState('all');
+  const [imp, setImp] = useState({ text: '', consent: false, busy: false, msg: '', ok: false });
   const [redeem, setRedeem] = useState({ code: '', amount: '', msg: '', ok: false, balance: null, busy: false });
   const [plan, setPlan] = useState('starter');
   const [cycle, setCycle] = useState('monthly');
@@ -186,7 +192,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!slug) return;
-    if (tab === 'customers' && customers === null) getJson('/api/site/customers').then((j) => setCustomers(j.ok ? j.data : []));
+    if ((tab === 'customers' || tab === 'bookings') && customers === null) getJson('/api/site/customers').then((j) => setCustomers(j.ok ? j.data : []));
+    if (tab === 'money' && money === null) getJson('/api/site/money').then((j) => setMoney(j.ok ? (j.data || {}) : {}));
+    if (tab === 'reviews' && reviews === null) getJson('/api/site/reviews').then((j) => setReviews(j.ok ? j.data : []));
     if (tab === 'giftcards' && cards === null) getJson('/api/site/giftcards').then((j) => setCards(j.ok ? j.data : []));
   }, [tab, slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -311,6 +319,34 @@ export default function Dashboard() {
   const setBookingStatus = async (id, status) => {
     setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, status } : b)));
     await sendJson('/api/site/bookings', 'PUT', { id, status });
+  };
+  const assignStaff = async (id, staffId) => {
+    const nm = (staff.staff.find((x) => String(x.id) === String(staffId)) || {}).name || null;
+    setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, staff_id: staffId || null, staff_name: nm } : b)));
+    await sendJson('/api/site/bookings', 'PUT', { id, staffId: staffId || null });
+  };
+  const hideReview = async (id, hidden) => {
+    setReviews((rs) => (rs || []).map((r) => (r.id === id ? { ...r, hidden } : r)));
+    await sendJson('/api/site/reviews', 'PUT', { id, hidden });
+  };
+  const parseCustomers = (text) => {
+    const toIso = (v) => { const m = String(v || '').trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : String(v || '').trim(); };
+    const out = [];
+    for (const line of String(text || '').split(/\r?\n/)) {
+      const c = line.split(/[,;\t]/).map((x) => x.trim().replace(/^"|"$/g, ''));
+      if (c.every((x) => !x)) continue;
+      if (!c.some((x) => x.includes('@') || /\d{7,}/.test(x.replace(/[\s()+-]/g, '')))) continue; // header row
+      out.push({ name: c[0], contact: c[1], lastVisit: toIso(c[2]), service: c[3], spent: Number(String(c[4] || '').replace(/[^\d.]/g, '')) || 0 });
+    }
+    return out;
+  };
+  const runImport = async () => {
+    const rows = parseCustomers(imp.text);
+    if (!rows.length) { setImp({ ...imp, msg: 'Nothing to import yet. Each line needs a name and an email or phone.', ok: false }); return; }
+    setImp({ ...imp, busy: true, msg: '' });
+    const j = await sendJson('/api/site/import', 'POST', { rows, consent: imp.consent });
+    if (j.ok) { setImp({ text: '', consent: false, busy: false, ok: true, msg: j.added ? `Added ${j.added} customers${j.skipped ? `, skipped ${j.skipped}` : ''}.` : (j.note || 'Nothing new to add.') }); setCustomers(null); }
+    else setImp({ ...imp, busy: false, ok: false, msg: j.error || 'Import failed' });
   };
   const setOrderStatus = async (id, status) => {
     setOrders((os) => os.map((o) => (o.id === id ? { ...o, status } : o)));
@@ -469,6 +505,22 @@ export default function Dashboard() {
               <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Needs card payments connected in the Payments tab. The money goes to you like any other payment.</p>
             </div>
             <div style={box}>
+              <strong>Keep customers coming back</strong>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, margin: '6px 0' }}>
+                <input type="checkbox" checked={data.weeklySummary !== false} onChange={(e) => set('weeklySummary', e.target.checked)} /> Email me a summary every Monday
+              </label>
+              <span style={lbl}>Loyalty reward (Professional plan)</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select style={inp} disabled={plan === 'starter'} value={Number(data.loyaltyEvery) || 0} onChange={(e) => set('loyaltyEvery', Number(e.target.value))}>
+                  {[0, 3, 4, 5, 6, 8, 10].map((n) => (<option key={n} value={n}>{n === 0 ? 'Off' : `Every ${n}th visit`}</option>))}
+                </select>
+                <select style={inp} disabled={plan === 'starter' || !data.loyaltyEvery} value={Number(data.loyaltyPercent) || 10} onChange={(e) => set('loyaltyPercent', Number(e.target.value))}>
+                  {[5, 10, 15, 20, 25, 30, 50].map((n) => (<option key={n} value={n}>{n}% off</option>))}
+                </select>
+              </div>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Customers are matched by the phone or email they book with. The discount is applied automatically on that booking. Press Save after changing this.</p>
+            </div>
+            <div style={box}>
               <strong>Top businesses</strong>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, margin: '6px 0' }}>
                 <input type="checkbox" checked={!!data.showInTop} onChange={(e) => set('showInTop', e.target.checked)} /> Show my business in the public “Top businesses” list
@@ -603,13 +655,82 @@ export default function Dashboard() {
             </div>
           </>)}
 
+          {tab === 'money' && (!slug ? needSave : money === null ? <div style={box}>Loading…</div> : !money.month_earned && money.month_earned !== 0 ? <div style={box}>No numbers yet.</div> : <>
+            <div style={box}>
+              <strong>Money from completed visits</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 12px' }}>Counts visits you mark Completed on the Bookings tab. Customers you imported are not counted.</p>
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                <div><div style={{ fontSize: 26, fontWeight: 700 }}>{fm(money.month_earned)}</div><div style={{ fontSize: 12, color: '#6b7280' }}>this month</div></div>
+                <div><div style={{ fontSize: 26, fontWeight: 700 }}>{fm(money.last_month_earned)}</div><div style={{ fontSize: 12, color: '#6b7280' }}>last month</div></div>
+                <div><div style={{ fontSize: 26, fontWeight: 700 }}>{fm(money.d30_earned)}</div><div style={{ fontSize: 12, color: '#6b7280' }}>last 30 days ({money.d30_visits} visits)</div></div>
+              </div>
+            </div>
+            <div style={box}>
+              <strong>Coming up</strong>
+              <div style={{ fontSize: 14, marginTop: 6 }}>{money.upcoming_n} bookings worth {fm(money.upcoming)} are waiting or confirmed.</div>
+              {money.no_show30 > 0 && <div style={{ fontSize: 14, marginTop: 6, color: '#b45309' }}>{money.no_show30} no-shows in the last 30 days cost about {fm(money.lost30)}. Deposits in the Payments tab help prevent this.</div>}
+            </div>
+            <div style={box}>
+              <strong>Paid online through GNIS (last 30 days)</strong>
+              <div style={{ fontSize: 14, marginTop: 6, lineHeight: 1.7 }}>
+                Deposits and gift cards collected: {fm(money.onlineCollected30)}<br />
+                Estimated platform fee ({money.feePercent}%): {fm(money.feeEstimate30)}<br />
+                Gift card balances you still owe customers: {fm(money.giftOwed)}<br />
+                Gift cards used at booking: {fm(money.gift_used30)}
+              </div>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '8px 0 0' }}>The payment company may also take its own card fee. Your payment provider’s dashboard shows exact payouts.</p>
+            </div>
+            {money.topServices.length > 0 && <div style={box}>
+              <strong>Best earners (30 days)</strong>
+              {money.topServices.map((x) => (<div key={x.service} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '6px 0', borderTop: '1px solid #f3f4f6' }}><span>{x.service} · {x.n}</span><span>{fm(x.total)}</span></div>))}
+            </div>}
+          </>)}
+
+          {tab === 'reviews' && (!slug ? needSave : reviews === null ? <div style={box}>Loading reviews…</div> : <>
+            <div style={box}>
+              <strong>Customer reviews</strong>
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '6px 0 0' }}>The day after you mark a visit Completed, the customer gets an email with five stars to tap (only if they gave an email). Their rating and comment show on your page and in the directory. You can hide a review, but you cannot change what they wrote.</p>
+              {reviews.length > 0 && <p style={{ fontSize: 14, margin: '8px 0 0' }}>Average {(reviews.filter((r) => !r.hidden).reduce((t, r) => t + r.rating, 0) / Math.max(1, reviews.filter((r) => !r.hidden).length)).toFixed(1)} of 5 from {reviews.filter((r) => !r.hidden).length} shown reviews</p>}
+            </div>
+            {reviews.length === 0 && <div style={box}>No reviews yet. Mark visits Completed and they will start to arrive.</div>}
+            {reviews.map((r) => (
+              <div key={r.id} style={{ ...box, opacity: r.hidden ? 0.55 : 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><strong>{r.customer}</strong><span style={{ color: '#f59e0b' }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span></div>
+                {r.comment && <p style={{ margin: '6px 0', fontSize: 14 }}>{r.comment}</p>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#6b7280' }}><span>{r.created}{r.hidden ? ' · hidden' : ''}</span><button style={sm('#374151')} onClick={() => hideReview(r.id, !r.hidden)}>{r.hidden ? 'Show' : 'Hide'}</button></div>
+              </div>
+            ))}
+          </>)}
+
           {tab === 'bookings' && (<>
             <div style={{ ...box, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <span style={{ fontSize: 14 }}>{bookings.length} bookings · {new Set(bookings.map((b) => String(b.contact).toLowerCase())).size} customers</span>
               <a href="/api/site/export?type=bookings" style={{ ...btn('#059669'), textDecoration: 'none' }}>Download Excel</a>
             </div>
             {bookings.length === 0 && <div style={box}>No bookings yet. Share your live site link to get started.</div>}
-            {bookings.map((b) => (
+            {bookings.length > 0 && (() => {
+              const today = new Date(Date.now()).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+              const td = bookings.filter((b) => b.date === today && ['pending', 'approved'].includes(b.status));
+              const waiting = bookings.filter((b) => b.status === 'pending').length;
+              return (<div style={box}>
+                <strong>Today</strong>
+                <div style={{ fontSize: 14, marginTop: 6, lineHeight: 1.7 }}>
+                  {td.length} appointment{td.length === 1 ? '' : 's'} today, worth {fm(td.reduce((t, b) => t + (Number(b.price) || 0), 0))}<br />
+                  {waiting} waiting for your answer · {dueList.length} customers due for a visit
+                </div>
+                {td.sort((a, b) => String(a.time).localeCompare(String(b.time))).map((b) => (<div key={b.id} style={{ fontSize: 13, color: '#374151', borderTop: '1px solid #f3f4f6', padding: '4px 0', marginTop: 4 }}>{b.time} · {b.customer} · {b.service}{b.staff_name ? ` · ${b.staff_name}` : ''}</div>))}
+              </div>);
+            })()}
+            {staff.staff.length > 0 && bookings.length > 0 && (
+              <div style={{ ...box, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13 }}>Show bookings for</span>
+                <select style={{ ...inp, width: 'auto', marginBottom: 0 }} value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)}>
+                  <option value="all">Everyone</option><option value="none">Not assigned</option>
+                  {staff.staff.map((x) => (<option key={x.id} value={String(x.id)}>{x.name}</option>))}
+                </select>
+              </div>
+            )}
+            {bookings.filter((b) => staffFilter === 'all' || (staffFilter === 'none' ? !b.staff_id : String(b.staff_id) === staffFilter)).map((b) => (
               <div key={b.id} style={box}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
                   <span>{b.customer}</span>
@@ -623,6 +744,14 @@ export default function Dashboard() {
                   <span style={pill(b.status)}>{String(b.status).replace('_', ' ')}</span>
                   {b.risk && <span title={b.risk.reasons.join(', ')} style={{ fontSize: 11, fontWeight: 700, color: RISK_COLOR[b.risk.label], border: `1px solid ${RISK_COLOR[b.risk.label]}`, padding: '1px 8px', borderRadius: 999 }}>No-show risk: {b.risk.label} ({Math.round(b.risk.p * 100)}%)</span>}
                   {b.deposit_amount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: b.deposit_paid ? '#059669' : '#d97706', border: `1px solid ${b.deposit_paid ? '#059669' : '#d97706'}`, padding: '1px 8px', borderRadius: 999 }}>{b.deposit_paid ? `Deposit paid ${fm(b.deposit_amount)}` : `Deposit unpaid ${fm(b.deposit_amount)}`}</span>}
+                  {b.gift_applied > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', border: '1px solid #7c3aed', padding: '1px 8px', borderRadius: 999 }}>Gift card −{fm(b.gift_applied)}</span>}
+                  {b.loyalty_applied && <span style={{ fontSize: 11, fontWeight: 700, color: '#0891b2', border: '1px solid #0891b2', padding: '1px 8px', borderRadius: 999 }}>Loyalty discount</span>}
+                  {staff.staff.length > 0 && (
+                    <select style={{ ...inp, width: 'auto', marginBottom: 0, padding: '4px 8px', fontSize: 12 }} value={b.staff_id || ''} onChange={(e) => assignStaff(b.id, e.target.value)}>
+                      <option value="">Not assigned</option>
+                      {staff.staff.map((x) => (<option key={x.id} value={String(x.id)}>{x.name}</option>))}
+                    </select>
+                  )}
                   {waLink(b) && <a href={waLink(b)} target="_blank" rel="noreferrer" style={{ ...sm('#25d366'), textDecoration: 'none' }}>WhatsApp</a>}
                   {BOOKING_STATUSES.filter((s) => s !== b.status).map((s) => (<button key={s} style={sm(STATUS_COLOR[s])} onClick={() => setBookingStatus(b.id, s)}>{s.replace('_', ' ')}</button>))}
                 </div>
@@ -634,6 +763,17 @@ export default function Dashboard() {
             <div style={{ ...box, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <span style={{ fontSize: 14 }}>{customers.length} customers · {customers.filter((c) => c.completed >= 3).length} regulars · {fm(customers.reduce((t, c) => t + c.spent, 0))} from completed visits</span>
               <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{custMsg && <span style={{ fontSize: 12, color: '#059669' }}>{custMsg}</span>}<button style={btn('#059669')} onClick={downloadCustomers}>Download</button></span>
+            </div>
+            <div style={box}>
+              <strong>Bring in your existing customers</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 8px' }}>Paste one customer per line: name, email or phone, last visit date (like 2026-09-14), service, amount spent. Only the first two are needed. Or choose a CSV file from Excel.</p>
+              <textarea style={{ ...inp, minHeight: 90, fontFamily: 'monospace', fontSize: 13 }} placeholder={'Amina Bello, amina@email.com, 2026-09-14, Braids, 60\nJohn Smith, 07700 900123'} value={imp.text} onChange={(e) => setImp({ ...imp, text: e.target.value, msg: '' })} />
+              <input type="file" accept=".csv,.txt" style={{ fontSize: 13, marginBottom: 8 }} onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) f.text().then((t) => setImp((i) => ({ ...i, text: t.slice(0, 200000), msg: '' }))); }} />
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, marginBottom: 8 }}>
+                <input type="checkbox" style={{ marginTop: 3 }} checked={imp.consent} onChange={(e) => setImp({ ...imp, consent: e.target.checked })} /> I have permission to contact these customers (they are my own customers and have not asked me to stop).
+              </label>
+              <button style={btn('#2563eb')} disabled={imp.busy || !imp.text.trim() || !imp.consent} onClick={runImport}>{imp.busy ? 'Importing…' : 'Import customers'}</button>
+              {imp.msg && <span style={{ fontSize: 13, marginLeft: 10, color: imp.ok ? '#059669' : '#dc2626' }}>{imp.msg}</span>}
             </div>
             <div style={box}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>

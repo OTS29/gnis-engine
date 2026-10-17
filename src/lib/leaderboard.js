@@ -10,7 +10,7 @@ const area = (loc) => String(loc || '').split(',').map((x) => x.trim()).filter(B
 export async function getTop(limit = 10) {
   const rows = await sql`
     with b as (
-      select site_id, lower(trim(contact)) as k, lower(status) as st, date::date as d, created_at from site_bookings
+      select site_id, lower(trim(contact)) as k, lower(status) as st, date::date as d, created_at from site_bookings where coalesce(source, 'website') <> 'import'
     ), per as (
       select site_id, k, count(*) filter (where st = 'completed')::int as done, min(created_at) as first_seen from b group by 1, 2
     ), agg as (
@@ -21,7 +21,9 @@ export async function getTop(limit = 10) {
         count(*) filter (where p.first_seen >= now() - interval '30 days')::int as new30
       from per p group by 1
     )
-    select s.slug, s.data->>'businessName' as name, s.data->>'location' as location, u.skill, agg.done30, agg.customers, agg.returning_customers, agg.new30
+    select s.slug, s.data->>'businessName' as name, s.data->>'location' as location, u.skill, agg.done30, agg.customers, agg.returning_customers, agg.new30,
+      (select avg(rating) from site_reviews r where r.site_id = s.id and not r.hidden)::float8 as rating,
+      (select count(*) from site_reviews r where r.site_id = s.id and not r.hidden)::int as rating_n
     from agg join sites s on s.id = agg.site_id join users u on u.id::text = s.owner_id::text
     where s.published and coalesce(u.suspended, false) = false
       and coalesce((s.data->>'showInTop')::boolean, false) = true
@@ -37,5 +39,6 @@ export async function getTop(limit = 10) {
     visits30: r.done30,
     returnRate: r.customers >= 3 ? Math.round((r.returning_customers / r.customers) * 100) : null,
     newCustomers30: r.new30,
+    rating: r.rating_n >= 3 ? Math.round(r.rating * 10) / 10 : null,
   }));
 }

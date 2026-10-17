@@ -3,6 +3,8 @@ import { sql } from '@/lib/db';
 import { sendReminder } from '@/lib/notify';
 import { planOfUser, limitsFor } from '@/lib/plans';
 import { runRebook } from '@/lib/rebook';
+import { askReviews } from '@/lib/reviews';
+import { runWeekly } from '@/lib/summary';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -32,7 +34,11 @@ export async function GET(req) {
     }
     let rebook = { sent: 0 };
     try { rebook = await runRebook(); } catch (e) { console.error('REBOOK_FAULT:', e); }
-    return NextResponse.json({ ok: true, found: rows.length, sent, rebook });
+    let reviews = { sent: 0 };
+    try { reviews = await askReviews(); } catch (e) { console.error('REVIEWS_CRON_FAULT:', e); }
+    let weekly = { sent: 0 };
+    try { weekly = await runWeekly(); } catch (e) { console.error('WEEKLY_CRON_FAULT:', e); }
+    return NextResponse.json({ ok: true, found: rows.length, sent, rebook, reviews, weekly });
   } catch (e) {
     console.error('CRON_REMINDERS_FAULT:', e);
     return NextResponse.json({ ok: false }, { status: 500 });

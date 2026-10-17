@@ -665,7 +665,7 @@ export default function LandingPage() {
                 </div>
                 <div className="text-right text-xs text-slate-300 leading-5">
                   <div><b>{t.visits30}</b> visits</div>
-                  <div>{t.returnRate !== null ? <><b>{t.returnRate}%</b> return</> : 'new'} · <b>{t.newCustomers30}</b> new</div>
+                  <div>{t.returnRate !== null ? <><b>{t.returnRate}%</b> return</> : 'new'} · <b>{t.newCustomers30}</b> new{t.rating ? <> · <span className="text-amber-400">★ {t.rating}</span></> : null}</div>
                 </div>
               </a>
             ))}
@@ -723,6 +723,7 @@ export default function LandingPage() {
                   </div>
                   <div className="p-6 flex flex-col gap-2 flex-1">
                     <h4 className="text-xl font-black tracking-tight text-white">{b.name}</h4>
+                    {b.rating ? <p className="text-amber-400 text-xs font-bold">★ {b.rating} <span className="text-slate-500 font-normal">({b.ratingN} review{b.ratingN === 1 ? '' : 's'})</span>{b.top ? <span className="ml-2 text-green-400">🏆 Top {b.top}</span> : null}</p> : (b.top ? <p className="text-green-400 text-xs font-bold">🏆 Top {b.top} this month</p> : null)}
                     {b.location && <p className="text-slate-400 text-xs font-bold">📍 {b.location}</p>}
                     {b.tagline && <p className="text-slate-300 text-sm">{b.tagline}</p>}
                     {b.services.length > 0 && <p className="text-[11px] text-green-400/90 font-mono">{b.services.join(' · ')}</p>}

@@ -15,6 +15,8 @@ export async function GET(req) {
     const rows = await sql`select b.id, b.customer, b.contact, b.service, b.price::float8 as price,
         b.list_price::float8 as list_price, coalesce(b.source, 'website') as source,
         b.date::text as date, left(b.time::text, 5) as time, lower(b.status) as status,
+        b.gift_applied::float8 as gift_applied, coalesce(b.loyalty_applied, false) as loyalty_applied, b.staff_id,
+        (select ss.name from site_staff ss where ss.id::text = b.staff_id limit 1) as staff_name,
         b.deposit_amount::float8 as deposit_amount, coalesce(b.deposit_paid, false) as deposit_paid,
         to_char(b.created_at at time zone 'Europe/London', 'YYYY-MM-DD HH24:MI') as created
       from site_bookings b join sites st on st.id = b.site_id
@@ -42,15 +44,33 @@ export async function PUT(req) {
   try {
     const s = getSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
-    const { id, status } = await req.json();
+    const body = await req.json();
+    const { id, status } = body;
+    if (Object.prototype.hasOwnProperty.call(body, 'staffId')) {
+      // Give a booking to a staff member (or clear it). The person must belong to the same business.
+      const sid = body.staffId ? String(body.staffId) : null;
+      if (sid) {
+        const [ok] = await sql`select 1 as x from site_staff ss join sites st on st.id = ss.site_id where ss.id::text = ${sid} and st.owner_id::text = ${String(s.userId)} and ss.active`;
+        if (!ok) return NextResponse.json({ ok: false, error: 'Staff member not found' }, { status: 404 });
+      }
+      const [u] = await sql`update site_bookings b set staff_id = ${sid} from sites st where b.id = ${id} and st.id = b.site_id and st.owner_id::text = ${String(s.userId)} returning b.id`;
+      if (!u) return NextResponse.json({ ok: false, error: 'Not found' }, { status: 404 });
+      return NextResponse.json({ ok: true });
+    }
     if (!BOOKING_STATUSES.includes(status)) return NextResponse.json({ ok: false, error: 'Bad status' }, { status: 400 });
 
     const [row] = await sql`select b.id, b.customer, b.contact, b.service, b.price::float8 as price,
-        b.date::text as date, left(b.time::text, 5) as time, lower(b.status) as prev, st.data, st.owner_id::text as owner
+        b.date::text as date, left(b.time::text, 5) as time, lower(b.status) as prev, b.gift_code, b.gift_applied::float8 as gift_applied, st.data, st.owner_id::text as owner
       from site_bookings b join sites st on st.id = b.site_id where b.id = ${id} and st.owner_id = ${s.userId}`;
     if (!row) return NextResponse.json({ ok: false, error: 'Not found' }, { status: 404 });
 
     await sql`update site_bookings set status = ${status} where id = ${id}`;
+    // A cancelled booking gives the gift card balance back (once).
+    if (status === 'cancelled' && row.prev !== 'cancelled' && row.gift_code && row.gift_applied > 0) {
+      await sql`update gift_cards g set balance = least(g.amount, g.balance + ${row.gift_applied}) from sites st
+        where g.code = ${row.gift_code} and g.site_id = st.id and st.owner_id::text = ${String(s.userId)}`;
+      await sql`update site_bookings set gift_applied = 0 where id = ${id}`;
+    }
     if (row.prev !== status) {
       const wa = !!row.data?.whatsappReminders && limitsFor(await planOfUser(row.owner)).whatsappAuto;
       after(async () => {
