@@ -111,6 +111,9 @@ export default function Dashboard() {
   const [showDue, setShowDue] = useState(true);
   const [cards, setCards] = useState(null);
   const [money, setMoney] = useState(null);
+  const [fq, setFq] = useState({ preset: 'month', from: '', to: '', group: 'day', staff: 'all', service: '' });
+  const [fin, setFin] = useState(null);
+  const [exp, setExp] = useState({ date: '', category: 'Supplies', amount: '', note: '', busy: false, msg: '' });
   const [reviews, setReviews] = useState(null);
   const [staffFilter, setStaffFilter] = useState('all');
   const [imp, setImp] = useState({ text: '', consent: false, busy: false, msg: '', ok: false });
@@ -197,6 +200,37 @@ export default function Dashboard() {
     if (tab === 'reviews' && reviews === null) getJson('/api/site/reviews').then((j) => setReviews(j.ok ? j.data : []));
     if (tab === 'giftcards' && cards === null) getJson('/api/site/giftcards').then((j) => setCards(j.ok ? j.data : []));
   }, [tab, slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const LONDON = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+  const shift = (iso, n) => new Date(new Date(`${iso}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
+  const rangeOf = (f) => {
+    const t = LONDON();
+    if (f.preset === 'today') return { from: t, to: t };
+    if (f.preset === '7') return { from: shift(t, -6), to: t };
+    if (f.preset === '30') return { from: shift(t, -29), to: t };
+    if (f.preset === 'month') return { from: `${t.slice(0, 8)}01`, to: t };
+    if (f.preset === 'lastmonth') { const first = `${t.slice(0, 8)}01`; const to = shift(first, -1); return { from: `${to.slice(0, 8)}01`, to }; }
+    if (f.preset === 'year') return { from: `${t.slice(0, 4)}-01-01`, to: t };
+    return { from: f.from || `${t.slice(0, 8)}01`, to: f.to || t };
+  };
+  const loadFin = async (f = fq) => {
+    const r = rangeOf(f);
+    const qs = new URLSearchParams({ from: r.from, to: r.to, group: f.group, staff: f.staff, service: f.service });
+    const j = await getJson(`/api/site/finance?${qs}`);
+    setFin(j.ok ? j.data : { error: j.error || 'Could not load' });
+  };
+  useEffect(() => { if (slug && tab === 'money') loadFin(); }, [tab, slug, fq]); // eslint-disable-line react-hooks/exhaustive-deps
+  const addExpense = async () => {
+    setExp((e) => ({ ...e, busy: true, msg: '' }));
+    const j = await sendJson('/api/site/expenses', 'POST', { date: exp.date || LONDON(), category: exp.category, amount: exp.amount, note: exp.note });
+    if (j.ok) { setExp({ date: '', category: exp.category, amount: '', note: '', busy: false, msg: 'Added ✓' }); loadFin(); }
+    else setExp((e) => ({ ...e, busy: false, msg: j.error || 'Could not save' }));
+  };
+  const delExpense = async (id) => {
+    if (!window.confirm('Delete this expense?')) return;
+    await sendJson(`/api/site/expenses?id=${id}`, 'DELETE');
+    loadFin();
+  };
 
   const cur = data.currency || 'GBP';
   const sym = (formatMoney(0, cur, data.language || 'en').replace(/[0-9.,\s]/g, '')) || cur;
@@ -684,6 +718,106 @@ export default function Dashboard() {
               <strong>Best earners (30 days)</strong>
               {money.topServices.map((x) => (<div key={x.service} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '6px 0', borderTop: '1px solid #f3f4f6' }}><span>{x.service} · {x.n}</span><span>{fm(x.total)}</span></div>))}
             </div>}
+
+            <div style={box}>
+              <strong>Income, expenses and profit</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>Income = visits you marked Completed (at the price booked) plus paid shop orders. Cash, tips and anything not recorded in GNIS are not included, so adjust a booking’s price if the customer paid differently.</p>
+              {fin && fin.pro === false && <p style={{ fontSize: 13, margin: '0 0 10px' }}>You are on the free view (this month, by day). Expenses, profit, filters, staff sales and downloads are on the Professional plan. <button type="button" style={{ background: 'none', border: 0, color: '#2563eb', cursor: 'pointer', padding: 0, textDecoration: 'underline' }} onClick={() => setTab('billing')}>See plans</button></p>}
+              {(!fin || fin.pro !== false) && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <select style={{ ...inp, width: 'auto', marginBottom: 0 }} value={fq.preset} onChange={(e) => setFq({ ...fq, preset: e.target.value })}>
+                    <option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="year">This year</option><option value="custom">Choose dates</option>
+                  </select>
+                  {fq.preset === 'custom' && <>
+                    <input type="date" style={{ ...inp, width: 'auto', marginBottom: 0 }} value={fq.from} onChange={(e) => setFq({ ...fq, from: e.target.value })} />
+                    <input type="date" style={{ ...inp, width: 'auto', marginBottom: 0 }} value={fq.to} onChange={(e) => setFq({ ...fq, to: e.target.value })} />
+                  </>}
+                  <select style={{ ...inp, width: 'auto', marginBottom: 0 }} value={fq.group} onChange={(e) => setFq({ ...fq, group: e.target.value })}>
+                    <option value="day">By day</option><option value="week">By week</option><option value="month">By month</option>
+                  </select>
+                  <select style={{ ...inp, width: 'auto', marginBottom: 0 }} value={fq.staff} onChange={(e) => setFq({ ...fq, staff: e.target.value })}>
+                    <option value="all">All staff</option><option value="none">Not assigned</option>
+                    {((fin && fin.staffList) || []).map((x) => (<option key={x.id} value={x.id}>{x.name}</option>))}
+                  </select>
+                  <select style={{ ...inp, width: 'auto', marginBottom: 0 }} value={fq.service} onChange={(e) => setFq({ ...fq, service: e.target.value })}>
+                    <option value="">All services</option>
+                    {((fin && fin.services) || []).map((x) => (<option key={x} value={x}>{x}</option>))}
+                  </select>
+                </div>
+              )}
+              {!fin ? <div style={{ fontSize: 14 }}>Loading…</div> : fin.error ? <div style={{ fontSize: 14, color: '#dc2626' }}>{fin.error}</div> : (() => {
+                const pc = (a, b) => (b > 0 ? `${a >= b ? '▲' : '▼'} ${Math.abs(Math.round(((a - b) / b) * 100))}% vs before` : '');
+                const maxV = Math.max(1, ...fin.series.map((x) => Math.max(x.income, x.expenses)));
+                const lab = (k) => (fin.group === 'month' ? new Date(`${k}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : fin.group === 'week' ? `Week of ${new Date(`${k}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : new Date(`${k}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }));
+                return (<>
+                  <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', margin: '6px 0 14px' }}>
+                    <div><div style={{ fontSize: 24, fontWeight: 700 }}>{fm(fin.totals.income)}</div><div style={{ fontSize: 12, color: '#6b7280' }}>income {pc(fin.totals.income, fin.prev.income)}</div></div>
+                    {fin.pro && !fin.filtered && <div><div style={{ fontSize: 24, fontWeight: 700 }}>{fm(fin.totals.expenses)}</div><div style={{ fontSize: 12, color: '#6b7280' }}>expenses</div></div>}
+                    {fin.pro && !fin.filtered && <div><div style={{ fontSize: 24, fontWeight: 700, color: fin.totals.profit >= 0 ? '#059669' : '#dc2626' }}>{fm(fin.totals.profit)}</div><div style={{ fontSize: 12, color: '#6b7280' }}>profit {pc(fin.totals.profit, fin.prev.profit)}</div></div>}
+                    <div><div style={{ fontSize: 24, fontWeight: 700 }}>{fin.totals.visits}</div><div style={{ fontSize: 12, color: '#6b7280' }}>visits · avg {fm(fin.totals.avg)}</div></div>
+                  </div>
+                  {fin.filtered && <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 10px' }}>Expenses and profit are for the whole business, so they are hidden while a staff or service filter is on.</p>}
+                  {fin.series.length === 0 ? <div style={{ fontSize: 14, color: '#6b7280' }}>Nothing recorded for these dates.</div> : (<>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120, overflowX: 'auto', paddingBottom: 4 }}>
+                      {fin.series.map((x) => (
+                        <div key={x.bucket} title={`${lab(x.bucket)}: income ${fm(x.income)}${fin.pro && !fin.filtered ? `, expenses ${fm(x.expenses)}` : ''}`} style={{ display: 'flex', alignItems: 'flex-end', gap: 1, flex: '1 0 14px', maxWidth: 40, height: '100%' }}>
+                          <div style={{ flex: 1, background: '#2563eb', height: `${Math.max(2, (x.income / maxV) * 100)}%`, borderRadius: '3px 3px 0 0' }} />
+                          {fin.pro && !fin.filtered && <div style={{ flex: 1, background: '#f59e0b', height: `${Math.max(x.expenses > 0 ? 2 : 0, (x.expenses / maxV) * 100)}%`, borderRadius: '3px 3px 0 0' }} />}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 10px' }}><span style={{ color: '#2563eb' }}>■</span> income {fin.pro && !fin.filtered && <><span style={{ color: '#f59e0b', marginLeft: 8 }}>■</span> expenses</>}</div>
+                    <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid #f3f4f6', borderRadius: 8 }}>
+                      {fin.series.slice().reverse().map((x) => (
+                        <div key={x.bucket} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, padding: '6px 10px', borderTop: '1px solid #f3f4f6' }}>
+                          <span style={{ flex: '1 1 auto' }}>{lab(x.bucket)}</span>
+                          <span style={{ width: 80, textAlign: 'right' }}>{fm(x.income)}</span>
+                          {fin.pro && !fin.filtered && <span style={{ width: 80, textAlign: 'right', color: '#b45309' }}>{x.expenses ? `−${fm(x.expenses)}` : '–'}</span>}
+                          {fin.pro && !fin.filtered && <span style={{ width: 80, textAlign: 'right', fontWeight: 700, color: x.profit >= 0 ? '#059669' : '#dc2626' }}>{fm(x.profit)}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </>)}
+                  {fin.pro && <div style={{ marginTop: 10 }}><a style={{ ...btn('#059669'), textDecoration: 'none', display: 'inline-block' }} href={`/api/site/finance-export?from=${fin.from}&to=${fin.to}`}>Download Excel ({fin.from} to {fin.to})</a></div>}
+                </>);
+              })()}
+            </div>
+
+            {fin && fin.pro && !fin.error && <>
+              <div style={box}>
+                <strong>Sales by staff member</strong>
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 8px' }}>Uses the person you chose on each booking in the Bookings tab.</p>
+                {fin.byStaff.length === 0 ? <div style={{ fontSize: 14, color: '#6b7280' }}>No completed visits in these dates.</div> : fin.byStaff.map((x) => (
+                  <div key={x.id || 'none'} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '6px 0', borderTop: '1px solid #f3f4f6' }}><span>{x.name} · {x.visits} visit{x.visits === 1 ? '' : 's'}</span><strong>{fm(x.income)}</strong></div>
+                ))}
+              </div>
+              {fin.byService.length > 0 && <div style={box}>
+                <strong>Income by service</strong>
+                {fin.byService.map((x) => (<div key={x.service} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '6px 0', borderTop: '1px solid #f3f4f6' }}><span>{x.service} · {x.visits}</span><span>{fm(x.income)}</span></div>))}
+              </div>}
+              <div style={box}>
+                <strong>Expenses</strong>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0' }}>
+                  <input type="date" style={{ ...inp, width: 'auto', marginBottom: 0 }} value={exp.date} onChange={(e) => setExp({ ...exp, date: e.target.value })} />
+                  <select style={{ ...inp, width: 'auto', marginBottom: 0 }} value={exp.category} onChange={(e) => setExp({ ...exp, category: e.target.value })}>
+                    {['Rent', 'Supplies', 'Stock', 'Staff pay', 'Marketing', 'Travel', 'Software', 'Utilities', 'Insurance', 'Other'].map((c) => (<option key={c}>{c}</option>))}
+                  </select>
+                  <input style={{ ...inp, width: 110, marginBottom: 0 }} type="number" min="0" step="0.01" placeholder={`Amount (${sym})`} value={exp.amount} onChange={(e) => setExp({ ...exp, amount: e.target.value })} />
+                  <input style={{ ...inp, flex: '1 1 140px', width: 'auto', marginBottom: 0 }} maxLength={200} placeholder="Note (optional)" value={exp.note} onChange={(e) => setExp({ ...exp, note: e.target.value })} />
+                  <button style={btn('#2563eb')} disabled={exp.busy || !exp.amount} onClick={addExpense}>Add</button>
+                </div>
+                {exp.msg && <div style={{ fontSize: 13, color: exp.msg.includes('✓') ? '#059669' : '#dc2626', marginBottom: 6 }}>{exp.msg}</div>}
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 6px' }}>Date left empty means today. Showing expenses for the dates chosen above.</p>
+                {fin.byCategory.length > 0 && <div style={{ fontSize: 13, margin: '6px 0 8px', color: '#374151' }}>{fin.byCategory.map((c) => `${c.category} ${fm(c.total)}`).join(' · ')}</div>}
+                {fin.expenses.length === 0 ? <div style={{ fontSize: 14, color: '#6b7280' }}>No expenses in these dates.</div> : fin.expenses.map((x) => (
+                  <div key={x.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 13, padding: '6px 0', borderTop: '1px solid #f3f4f6' }}>
+                    <span style={{ flex: 1, minWidth: 0 }}>{x.date} · {x.category}{x.note ? ` · ${x.note}` : ''}</span>
+                    <strong>{fm(x.amount)}</strong>
+                    <button style={sm('#dc2626')} onClick={() => delExpense(x.id)}>Delete</button>
+                  </div>
+                ))}
+              </div>
+            </>}
           </>)}
 
           {tab === 'reviews' && (!slug ? needSave : reviews === null ? <div style={box}>Loading reviews…</div> : <>

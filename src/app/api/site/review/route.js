@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { readReviewToken } from '@/lib/reviews';
+import { hit, clientIp } from '@/lib/rateLimit';
+import { sameOrigin } from '@/lib/security';
 
 export const runtime = 'nodejs';
 
@@ -41,6 +43,8 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
+    if (!sameOrigin(req)) return html('<h2>Not allowed</h2>', 403);
+    if (!(await hit(`review:ip:${clientIp(req)}`, 20, 3600)).allowed) return html('<h2>Too many requests</h2><p>Please try again later.</p>', 429);
     const f = await req.formData();
     const p = readReviewToken(f.get('t'));
     const r = Math.round(Number(f.get('r')));

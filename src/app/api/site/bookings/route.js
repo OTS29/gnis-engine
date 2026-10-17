@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server';
 import { sql } from '@/lib/db';
+import { sameOrigin } from '@/lib/security';
 import { getSession, isOwnerRole } from '@/lib/session';
 import { BOOKING_STATUSES } from '@/lib/siteDefaults';
 import { riskFor, siteBaseRate } from '@/lib/risk';
@@ -42,6 +43,7 @@ export async function GET(req) {
 
 export async function PUT(req) {
   try {
+    if (!sameOrigin(req)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 403 });
     const s = getSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const body = await req.json();

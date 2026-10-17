@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { sql } from '@/lib/db';
-import { hit, clientIp } from '@/lib/rateLimit';
+import { hit, isBlocked, clientIp } from '@/lib/rateLimit';
 import { notifyNewBooking } from '@/lib/notify';
 import { startDeposit } from '@/lib/deposits';
 import { planOfUser, limitsFor } from '@/lib/plans';
@@ -70,8 +70,10 @@ export async function POST(req) {
     const code = b.giftCode ? normCode(b.giftCode) : '';
     if (b.giftCode && !code) return NextResponse.json({ ok: false, error: 'That gift card code does not look right.' }, { status: 400 });
     if (code) {
+      const gk = `giftfail:${site.id}:${clientIp(req)}`;
+      if (await isBlocked(gk, 6)) return NextResponse.json({ ok: false, error: 'Too many wrong codes. Please try again later.' }, { status: 429 });
       [card] = await sql`select id, balance::float8 as balance, currency from gift_cards where code = ${code} and site_id = ${site.id} and status = 'active'`;
-      if (!card || !(card.balance > 0)) return NextResponse.json({ ok: false, error: 'That gift card was not found or has no balance left.' }, { status: 400 });
+      if (!card || !(card.balance > 0)) { await hit(gk, 6, 3600); return NextResponse.json({ ok: false, error: 'That gift card was not found or has no balance left.' }, { status: 400 }); }
       if (String(card.currency).toUpperCase() !== String(site.data?.currency || 'GBP').toUpperCase()) return NextResponse.json({ ok: false, error: 'That gift card is in a different currency.' }, { status: 400 });
     }
 

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { sameOrigin } from '@/lib/security';
+import { hit } from '@/lib/rateLimit';
 import { getSession, isOwnerRole } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -11,8 +13,10 @@ const isPhone = (s) => /^\+?[\d\s()-]{7,20}$/.test(s);
 // in "Due for a visit" and in rebooking emails. Imports never count towards the public stats or the Top businesses list.
 export async function POST(req) {
   try {
+    if (!sameOrigin(req)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 403 });
     const s = getSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
+    if (!(await hit(`import:${s.userId}`, 20, 3600)).allowed) return NextResponse.json({ ok: false, error: 'Too many imports. Try again later.' }, { status: 429 });
     const b = await req.json();
     if (b.consent !== true) return NextResponse.json({ ok: false, error: 'Please confirm you have permission to contact these customers.' }, { status: 400 });
     const [site] = await sql`select id from sites where owner_id::text = ${String(s.userId)}`;

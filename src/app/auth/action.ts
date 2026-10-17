@@ -5,6 +5,13 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import Stripe from 'stripe'
 import { sql } from '@/lib/db'
+import { headers } from 'next/headers'
+import { hit, isBlocked } from '@/lib/rateLimit'
+
+async function callerIp(): Promise<string> {
+  const h = await headers()
+  return ((h.get('x-forwarded-for') || '').split(',')[0] || h.get('x-real-ip') || 'unknown').trim()
+}
 
 async function createSession(user: { id: string; role: string }) {
   const token = jwt.sign(
@@ -25,10 +32,17 @@ async function createSession(user: { id: string; role: string }) {
 export async function login(formData: FormData) {
   try {
     const email = String(formData.get('email') || '').trim().toLowerCase()
-    const password = String(formData.get('password') || '')
+    const password = String(formData.get('password') || '').slice(0, 200)
+
+    // Slows down password guessing: limits per device and per email address (15 minutes).
+    const ip = await callerIp()
+    if (!(await hit(`login:ip:${ip}`, 40, 900)).allowed || (await isBlocked(`login:fail:${email}`, 8))) {
+      return { error: 'Too many attempts. Please wait 15 minutes and try again.' }
+    }
 
     const [user] = await sql`select * from users where email = ${email} limit 1`
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      await hit(`login:fail:${email}`, 8, 900)
       return { error: 'Invalid identity credentials' }
     }
 
@@ -58,8 +72,11 @@ export async function signup(formData: FormData) {
   try {
     const email = String(formData.get('email') || '').trim().toLowerCase()
     const password = String(formData.get('password') || '')
-    if (!email || password.length < 8) {
-      return { error: 'Invalid email or password (min 8 characters)' }
+    if (!email || email.length > 120 || password.length < 8 || password.length > 200) {
+      return { error: 'Invalid email or password (8 to 200 characters)' }
+    }
+    if (!(await hit(`signup:ip:${await callerIp()}`, 10, 3600)).allowed) {
+      return { error: 'Too many sign-ups from this device. Please try again later.' }
     }
 
     const name = (formData.get('name') as string) || null
