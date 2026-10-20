@@ -1,6 +1,6 @@
 import { cache } from 'react';
 import { sql } from '@/lib/db';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import SiteRenderer from '@/components/SiteRenderer';
 import { publicData } from '@/lib/siteDefaults';
 import { SITE_URL } from '@/lib/site';
@@ -46,7 +46,13 @@ export async function generateMetadata({ params }) {
 export default async function SitePage({ params }) {
   const { slug } = await params;
   const found = await load(slug);
-  if (!found) notFound();
+  if (!found) {
+    // An old address (after the owner changed it) forwards to the current one.
+    let to = null;
+    try { const [r] = await sql`select st.slug from site_slug_redirects r join sites st on st.id::text = r.site_id where r.old_slug = ${slug} and st.published`; to = r?.slug || null; } catch {}
+    if (to && to !== slug) permanentRedirect(`/site/${to}`);
+    notFound();
+  }
   const { site, count, badge, topRank, realReviews, ratingAvg, ratingN } = found;
   const d = site.data || {};
   const ld = {

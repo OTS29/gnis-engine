@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { ORDER_STATUSES } from '@/lib/siteDefaults';
 
 export const runtime = 'nodejs';
 
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const rows = await sql`select o.id, o.customer, o.contact, o.items, o.total::float8 as total, o.status,
         to_char(o.created_at at time zone 'Europe/London', 'YYYY-MM-DD HH24:MI') as created
@@ -22,7 +22,7 @@ export async function GET(req) {
 
 export async function PUT(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const { id, status } = await req.json();
     if (!ORDER_STATUSES.includes(status)) return NextResponse.json({ ok: false, error: 'Bad status' }, { status: 400 });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { hit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
@@ -9,7 +9,7 @@ const OK = ['image/jpeg', 'image/png', 'image/webp'];
 
 export async function POST(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       return NextResponse.json({ ok: false, error: 'Photo storage is not connected yet. Add a Blob store in Vercel Storage.' }, { status: 500 });

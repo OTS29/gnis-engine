@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { sameOrigin } from '@/lib/security';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
 // Your customers, built from your bookings. Notes and "do not remind" are saved per customer.
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const [site] = await sql`select id from sites where owner_id = ${s.userId}`;
     if (!site) return NextResponse.json({ ok: true, data: [] });
@@ -37,7 +37,7 @@ export async function GET(req) {
 export async function PUT(req) {
   try {
     if (!sameOrigin(req)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 403 });
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const b = await req.json();
     const key = String(b.key || '').trim().toLowerCase().slice(0, 120);

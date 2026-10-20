@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
+import { safeCell } from '@/lib/security';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +18,7 @@ function send(wb, name) {
 
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const type = new URL(req.url).searchParams.get('type') || 'bookings';
     const wb = XLSX.utils.book_new();
@@ -28,7 +29,7 @@ export async function GET(req) {
           to_char(b.created_at at time zone 'Europe/London', 'YYYY-MM-DD HH24:MI') as created
         from site_bookings b join sites st on st.id = b.site_id where st.owner_id = ${s.userId} order by b.date desc, b.time desc`;
       const head = ['Ref', 'Customer', 'Contact', 'Service', 'Listed price', 'Agreed price', 'How booked', 'Service date', 'Service time', 'Status', 'Booked on'];
-      const data = rows.map((r) => [r.id, r.customer, r.contact, r.service, r.list_price ?? r.price, r.price, r.source === 'negotiated' ? 'Negotiated price' : 'Website', r.date, r.time, r.status, r.created]);
+      const data = rows.map((r) => [r.id, safeCell(r.customer), safeCell(r.contact), safeCell(r.service), r.list_price ?? r.price, r.price, r.source === 'negotiated' ? 'Negotiated price' : 'Website', r.date, r.time, r.status, r.created]);
       const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
       ws['!cols'] = head.map((h, i) => ({ wch: [6, 22, 26, 24, 16, 16, 18, 14, 12, 12, 18][i] }));
       XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
@@ -57,7 +58,7 @@ export async function GET(req) {
           to_char(o.created_at at time zone 'Europe/London', 'YYYY-MM-DD HH24:MI') as created
         from site_orders o join sites st on st.id = o.site_id where st.owner_id = ${s.userId} order by o.created_at desc`;
       const head = ['Order', 'Customer', 'Contact', 'Items', 'Total', 'Status', 'Ordered on'];
-      const data = rows.map((r) => [r.id, r.customer, r.contact, (r.items || []).map((i) => `${i.qty} x ${i.name}`).join(', '), r.total, r.status, r.created]);
+      const data = rows.map((r) => [r.id, safeCell(r.customer), safeCell(r.contact), safeCell((r.items || []).map((i) => `${i.qty} x ${i.name}`).join(', ')), r.total, r.status, r.created]);
       const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
       ws['!cols'] = head.map((h, i) => ({ wch: [7, 22, 26, 44, 12, 12, 18][i] }));
       XLSX.utils.book_append_sheet(wb, ws, 'Orders');
@@ -73,7 +74,7 @@ export async function GET(req) {
         from site_shifts h join site_staff s on s.id = h.staff_id join sites st on st.id = s.site_id
         where st.owner_id = ${s.userId} order by h.clock_in desc`;
       const head = ['Staff', 'Date', 'Clock in', 'Clock out', 'Hours'];
-      const ws = XLSX.utils.aoa_to_sheet([head, ...rows.map((r) => [r.name, r.day, r.clock_in, r.clock_out || 'still working', r.hours])]);
+      const ws = XLSX.utils.aoa_to_sheet([head, ...rows.map((r) => [safeCell(r.name), r.day, r.clock_in, r.clock_out || 'still working', r.hours])]);
       ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 8 }];
       XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
       return send(wb, 'timesheet');

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const [site] = await sql`select id, slug, ref_code from sites where owner_id = ${s.userId}`;
     if (!site) return NextResponse.json({ ok: true, data: null });

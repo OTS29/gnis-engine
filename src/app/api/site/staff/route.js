@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import crypto from 'crypto';
 import { planOfUser, limitsFor, PLAN_LABEL } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
 async function ownerSite(req) {
-  const s = getSession(req);
+  const s = await liveSession(req);
   if (!isOwnerRole(s)) return null;
   const [site] = await sql`select id from sites where owner_id = ${s.userId}`;
   return site || null;
@@ -50,7 +50,7 @@ export async function POST(req) {
     const { name } = await req.json();
     const clean = String(name || '').trim().slice(0, 60);
     if (!clean) return NextResponse.json({ ok: false, error: 'Enter a name' }, { status: 400 });
-    const s = getSession(req);
+    const s = await liveSession(req);
     const plan = await planOfUser(s.userId);
     const max = limitsFor(plan).staff;
     const [c] = await sql`select count(*)::int as n from site_staff where site_id = ${site.id} and active`;

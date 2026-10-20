@@ -4,6 +4,7 @@ import { logout } from '@/app/auth/action';
 import SiteRenderer from '@/components/SiteRenderer';
 import { TEMPLATE_LIST, ACCENTS, DEFAULT_DATA, BOOKING_STATUSES, ORDER_STATUSES, CURRENCIES, STRIPE_CURRENCIES, LANGUAGES, mergeData, formatMoney } from '@/lib/siteDefaults';
 import { PROFESSIONS } from '@/lib/professions';
+import { COUNTRY_CODES } from '@/lib/countries';
 
 const TABS = [
   { id: 'design', l: 'Design' },
@@ -125,6 +126,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [prof, setProf] = useState({ slug: '', country: '', nextChange: null, msg: '', ok: false, busy: false, loaded: false });
+  const [bookMsg, setBookMsg] = useState('');
+  const [payMethod, setPayMethod] = useState({});
   const [copied, setCopied] = useState(false);
   const fileRef = useRef(null);
   const target = useRef(null);
@@ -200,6 +204,11 @@ export default function Dashboard() {
     if (tab === 'reviews' && reviews === null) getJson('/api/site/reviews').then((j) => setReviews(j.ok ? j.data : []));
     if (tab === 'giftcards' && cards === null) getJson('/api/site/giftcards').then((j) => setCards(j.ok ? j.data : []));
   }, [tab, slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!slug || prof.loaded) return;
+    getJson('/api/site/profile').then((j) => { if (j.ok && j.data) setProf((x) => ({ ...x, slug: j.data.slug || slug, country: j.data.country || '', nextChange: j.data.nextChange || null, loaded: true })); });
+  }, [slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const LONDON = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
   const shift = (iso, n) => new Date(new Date(`${iso}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
@@ -359,6 +368,25 @@ export default function Dashboard() {
     setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, staff_id: staffId || null, staff_name: nm } : b)));
     await sendJson('/api/site/bookings', 'PUT', { id, staffId: staffId || null });
   };
+  const saveProfile = async () => {
+    setProf((x) => ({ ...x, busy: true, msg: '' }));
+    const j = await sendJson('/api/site/profile', 'PUT', { slug: prof.slug, country: prof.country });
+    if (j.ok) {
+      if (j.slug) setSlug(j.slug);
+      setProf((x) => ({ ...x, busy: false, ok: true, slug: j.slug || x.slug, msg: 'Saved ✓ Your old address still works and forwards to the new one.', nextChange: null }));
+      getJson('/api/site/profile').then((r) => { if (r.ok && r.data) setProf((x) => ({ ...x, nextChange: r.data.nextChange || null })); });
+    } else setProf((x) => ({ ...x, busy: false, ok: false, msg: j.error || 'Could not save' }));
+  };
+  const markPaid = async (id, paid) => {
+    const method = payMethod[id] || 'cash';
+    setBookings((bs) => bs.map((b) => (b.id === id ? { ...b, paid, paid_method: paid ? method : null } : b)));
+    await sendJson('/api/site/bookings', 'PUT', { id, paid, method });
+  };
+  const emailInvoice = async (id) => {
+    setBookMsg('Sending…');
+    const j = await sendJson('/api/site/invoice', 'POST', { id });
+    setBookMsg(j.ok ? 'Sent ✓ The customer has an email with a link to print or save it.' : (j.error || 'Could not send'));
+  };
   const hideReview = async (id, hidden) => {
     setReviews((rs) => (rs || []).map((r) => (r.id === id ? { ...r, hidden } : r)));
     await sendJson('/api/site/reviews', 'PUT', { id, hidden });
@@ -509,6 +537,38 @@ export default function Dashboard() {
               <span style={lbl}>VAT / tax number (shown in your footer, optional)</span>
               <input style={inp} value={data.vatNumber || ''} onChange={(e) => set('vatNumber', e.target.value)} />
             </div>
+            <div style={box}>
+              <strong>Invoice and receipt details</strong>
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>Shown on the invoices and receipts you print or email from the Bookings tab. A limited company should add its registered name, number and address.</p>
+              <span style={lbl}>Registered business name (optional, for example Your Company Ltd)</span>
+              <input style={inp} value={data.legalName || ''} maxLength={120} onChange={(e) => set('legalName', e.target.value)} />
+              <span style={lbl}>Company number (optional)</span>
+              <input style={inp} value={data.companyNumber || ''} maxLength={30} onChange={(e) => set('companyNumber', e.target.value)} />
+              <span style={lbl}>Registered office address (optional, uses your location if empty)</span>
+              <input style={inp} value={data.regAddress || ''} maxLength={200} onChange={(e) => set('regAddress', e.target.value)} />
+              <span style={lbl}>Note on invoices, for example bank transfer details (never shown on your public site)</span>
+              <textarea style={{ ...inp, minHeight: 70 }} value={data.invoiceNote || ''} maxLength={400} onChange={(e) => set('invoiceNote', e.target.value)} />
+              <p style={{ fontSize: 12, color: '#6b7280', margin: '0' }}>Press Save at the top to keep these.</p>
+            </div>
+            {slug && (
+              <div style={box}>
+                <strong>Your web address and country</strong>
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 10px' }}>The country decides which country list you appear under in the directory. If you change your address, the old one keeps working and forwards to the new one. You can change it once every 7 days.</p>
+                <span style={lbl}>Web address</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, color: '#6b7280' }}>{typeof window !== 'undefined' ? window.location.host : ''}/site/</span>
+                  <input style={{ ...inp, width: 'auto', flex: 1, minWidth: 140, marginBottom: 0 }} value={prof.slug} maxLength={40} onChange={(e) => setProf((x) => ({ ...x, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'), msg: '' }))} />
+                </div>
+                {prof.nextChange && <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>You changed it recently. You can change it again from {prof.nextChange}.</p>}
+                <span style={lbl}>Country of your business</span>
+                <select style={inp} value={prof.country} onChange={(e) => setProf((x) => ({ ...x, country: e.target.value, msg: '' }))}>
+                  <option value="">Choose a country</option>
+                  {COUNTRY_CODES.map((c) => { let n = c; try { n = new Intl.DisplayNames(['en'], { type: 'region' }).of(c) || c; } catch {} return (<option key={c} value={c}>{n}</option>); })}
+                </select>
+                <button style={btn('#111827')} disabled={prof.busy} onClick={saveProfile}>{prof.busy ? 'Saving…' : 'Save address and country'}</button>
+                {prof.msg && <p style={{ fontSize: 13, margin: '8px 0 0', color: prof.ok ? '#059669' : '#dc2626' }}>{prof.msg}</p>}
+              </div>
+            )}
             <div style={box}>
               <strong>Deposits and WhatsApp</strong>
               {plan === 'starter' && (
@@ -864,6 +924,7 @@ export default function Dashboard() {
                 </select>
               </div>
             )}
+            {bookMsg && <div style={{ ...box, fontSize: 13 }}>{bookMsg}</div>}
             {bookings.filter((b) => staffFilter === 'all' || (staffFilter === 'none' ? !b.staff_id : String(b.staff_id) === staffFilter)).map((b) => (
               <div key={b.id} style={box}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
@@ -886,8 +947,19 @@ export default function Dashboard() {
                       {staff.staff.map((x) => (<option key={x.id} value={String(x.id)}>{x.name}</option>))}
                     </select>
                   )}
+                  {b.paid && <span style={{ fontSize: 11, fontWeight: 700, color: '#059669', border: '1px solid #059669', padding: '1px 8px', borderRadius: 999 }}>Paid{b.paid_method ? ` · ${b.paid_method}` : ''}</span>}
                   {waLink(b) && <a href={waLink(b)} target="_blank" rel="noreferrer" style={{ ...sm('#25d366'), textDecoration: 'none' }}>WhatsApp</a>}
                   {BOOKING_STATUSES.filter((s) => s !== b.status).map((s) => (<button key={s} style={sm(STATUS_COLOR[s])} onClick={() => setBookingStatus(b.id, s)}>{s.replace('_', ' ')}</button>))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid #f3f4f6' }}>
+                  {!b.paid ? (<>
+                    <select style={{ ...inp, width: 'auto', marginBottom: 0, padding: '4px 8px', fontSize: 12 }} value={payMethod[b.id] || 'cash'} onChange={(e) => setPayMethod((m) => ({ ...m, [b.id]: e.target.value }))}>
+                      <option value="cash">Cash</option><option value="bank transfer">Bank transfer</option><option value="card">Card</option><option value="other">Other</option>
+                    </select>
+                    <button style={sm('#059669')} onClick={() => markPaid(b.id, true)}>Mark paid</button>
+                  </>) : (<button style={sm('#6b7280')} onClick={() => markPaid(b.id, false)}>Undo paid</button>)}
+                  <a href={`/api/site/invoice?id=${encodeURIComponent(b.id)}`} target="_blank" rel="noreferrer" style={{ ...sm('#2563eb'), textDecoration: 'none' }}>{b.paid ? 'Print receipt' : 'Print invoice'}</a>
+                  {String(b.contact).includes('@') && <button style={sm('#7c3aed')} onClick={() => emailInvoice(b.id)}>Email it</button>}
                 </div>
               </div>
             ))}

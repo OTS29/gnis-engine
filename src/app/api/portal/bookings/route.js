@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession } from '@/lib/session';
+import { liveSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
 // A signed-in client sees bookings and orders made with their own email address.
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!s || !s.userId) return NextResponse.json({ ok: false, error: 'Please log in' }, { status: 401 });
     const [u] = await sql`select email, name from users where id = ${s.userId}`;
     const email = String(u?.email || '').trim().toLowerCase();

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { planOfUser, limitsFor } from '@/lib/plans';
 import { cleanRange, addDays, londonToday } from '@/lib/finance';
 
@@ -11,7 +11,7 @@ const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 // Income, expenses and profit for a date range, grouped by day / week / month, with optional staff and service filters.
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const [site] = await sql`select id from sites where owner_id::text = ${String(s.userId)}`;
     if (!site) return NextResponse.json({ ok: true, data: null });

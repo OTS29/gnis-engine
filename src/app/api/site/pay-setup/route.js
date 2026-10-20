@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { hit } from '@/lib/rateLimit';
 import { AFRICA_CURRENCIES, CURRENCY_COUNTRY, paystackOn, flutterwaveOn, listBanks, resolveAccount, paystack, flutterwave, feePercent } from '@/lib/payments';
 
@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 const clean = (v) => String(v || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 20);
 
 async function owner(req) {
-  const s = getSession(req);
+  const s = await liveSession(req);
   if (!isOwnerRole(s)) return { error: NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 }) };
   const [site] = await sql`select id, data, pay_provider, pay_account, pay_ready from sites where owner_id = ${s.userId}`;
   if (!site) return { error: NextResponse.json({ ok: false, error: 'Save your site first.' }, { status: 400 }) };

@@ -75,7 +75,7 @@ export async function PATCH(req) {
     if (act === 'role') {
       if (!ROLES.includes(b.role)) return bad('Unknown role');
       if (self) return bad('You cannot change your own role');
-      await sql`update users set role = ${b.role} where id::text = ${id}`;
+      await sql`update users set role = ${b.role}, sessions_valid_after = now() where id::text = ${id}`;
       await logAdmin(admin, 'role', u, `${u.role} to ${b.role}`);
       return NextResponse.json({ ok: true });
     }
@@ -83,7 +83,7 @@ export async function PATCH(req) {
       if (self) return bad('You cannot deactivate yourself');
       if (u.role === 'admin') return bad('Change their role first, then deactivate');
       const on = act === 'suspend';
-      await sql`update users set suspended = ${on} where id::text = ${id}`;
+      await sql`update users set suspended = ${on}, sessions_valid_after = now() where id::text = ${id}`;
       // Deactivating also takes their public page offline. Reactivating does not republish it: they do that by saving.
       if (on) await sql`update sites set published = false where owner_id::text = ${id}`;
       await logAdmin(admin, act, u, on ? 'Login blocked and site unpublished' : 'Login allowed again');
@@ -109,7 +109,7 @@ export async function PATCH(req) {
     if (act === 'reset_password') {
       const password = tempPassword();
       const hash = await bcrypt.hash(password, 12);
-      await sql`update users set password_hash = ${hash} where id::text = ${id}`;
+      await sql`update users set password_hash = ${hash}, sessions_valid_after = now() where id::text = ${id}`;
       await logAdmin(admin, 'reset_password', u, 'Temporary password issued');
       return NextResponse.json({ ok: true, password });
     }

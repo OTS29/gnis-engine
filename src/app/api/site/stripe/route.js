@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { getStripe, baseUrl } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
 
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const [site] = await sql`select id, stripe_account_id from sites where owner_id = ${s.userId}`;
     const stripe = getStripe();
@@ -24,7 +24,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const stripe = getStripe();
     if (!stripe) return NextResponse.json({ ok: false, error: 'Stripe is not configured yet (missing STRIPE_SECRET_KEY).' }, { status: 400 });

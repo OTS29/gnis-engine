@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
 // "What did I earn?" Numbers come straight from the owner's bookings and gift cards.
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const [site] = await sql`select id from sites where owner_id::text = ${String(s.userId)}`;
     if (!site) return NextResponse.json({ ok: true, data: null });

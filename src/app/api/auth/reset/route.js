@@ -22,7 +22,7 @@ export async function POST(req) {
     if (!r) return NextResponse.json({ ok: false, error: 'This link has expired or was already used. Ask for a new one.' }, { status: 400 });
 
     const pw = await bcrypt.hash(password, 12);
-    await sql`update users set password_hash = ${pw} where id::text = ${r.user_id}`;
+    await sql`update users set password_hash = ${pw}, sessions_valid_after = now() where id::text = ${r.user_id}`;
     await sql`update password_resets set used_at = now() where token_hash = ${hash}`;
     return NextResponse.json({ ok: true });
   } catch (e) {

@@ -46,6 +46,10 @@ export const DEFAULT_DATA = {
   taxRate: 0,
   taxIncluded: true,
   vatNumber: '',
+  legalName: '',
+  companyNumber: '',
+  regAddress: '',
+  invoiceNote: '',
   depositPercent: 0,
   whatsappReminders: false,
   giftCards: false,
@@ -99,6 +103,10 @@ export function cleanData(d) {
     taxRate: Math.min(30, Math.max(0, Number(x.taxRate) || 0)),
     taxIncluded: x.taxIncluded !== false,
     vatNumber: str(x.vatNumber, 30),
+    legalName: str(x.legalName, 120),
+    companyNumber: str(x.companyNumber, 30),
+    regAddress: str(x.regAddress, 200),
+    invoiceNote: str(x.invoiceNote, 400),
     depositPercent: Math.min(100, Math.max(0, Math.round(Number(x.depositPercent) || 0))),
     whatsappReminders: !!x.whatsappReminders,
     showInTop: !!x.showInTop,
@@ -153,7 +161,9 @@ export function socialUrl(kind, v) {
 // What visitors are allowed to see. The lowest accepted price must never leave the server.
 export function publicData(d) {
   const x = mergeData(d);
-  return { ...x, services: x.services.map(({ minPrice, ...rest }) => rest) };
+  // invoiceNote may hold bank details, so it never goes to website visitors.
+  const { invoiceNote, ...open } = x;
+  return { ...open, services: x.services.map(({ minPrice, ...rest }) => rest) };
 }
 
 // Gross amount for a price given the seller's tax settings.

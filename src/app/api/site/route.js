@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { cleanData, TEMPLATE_LIST } from '@/lib/siteDefaults';
 import { planOfUser, limitsFor, PLAN_LABEL } from '@/lib/plans';
 
@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 export async function GET(req) {
   try {
-    const session = getSession(req);
+    const session = await liveSession(req);
     if (!isOwnerRole(session)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
 
     const [site] = await sql`select slug, template, data, stripe_account_id, stripe_ready from sites where owner_id = ${session.userId}`;
@@ -25,7 +25,7 @@ export async function GET(req) {
 
 export async function PUT(req) {
   try {
-    const session = getSession(req);
+    const session = await liveSession(req);
     if (!isOwnerRole(session)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
 
     const raw = await req.text();

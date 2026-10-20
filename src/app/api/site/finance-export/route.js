@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { planOfUser, limitsFor } from '@/lib/plans';
 import { safeCell } from '@/lib/security';
 import { cleanRange, londonToday } from '@/lib/finance';
@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 // Excel file for the chosen dates: summary, every completed visit, every expense, and sales per staff member.
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     if (!limitsFor(await planOfUser(s.userId)).finance) return NextResponse.json({ ok: false, error: 'Professional plan feature' }, { status: 402 });
     const [site] = await sql`select id from sites where owner_id::text = ${String(s.userId)}`;

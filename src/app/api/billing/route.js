@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { hit } from '@/lib/rateLimit';
 import { getStripe, baseUrl } from '@/lib/stripe';
 import { paystack, flutterwave, toMinor, newRef } from '@/lib/payments';
@@ -10,7 +10,7 @@ import { REGIONS, PLANS, REGION_ORDER } from '@/lib/regions';
 export const runtime = 'nodejs';
 
 async function ctx(req, chosen) {
-  const s = getSession(req);
+  const s = await liveSession(req);
   if (!isOwnerRole(s)) return { error: NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 }) };
   const [site] = await sql`select data from sites where owner_id = ${s.userId}`;
   // The seller may pick their country; otherwise we use where they are.

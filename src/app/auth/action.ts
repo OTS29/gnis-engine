@@ -89,7 +89,9 @@ export async function signup(formData: FormData) {
     const address = (formData.get('address') as string) || null
     const postcode = (formData.get('postcode') as string) || null
     const verificationMethod = (formData.get('verificationMethod') as string) || null
-    const idNumber = (formData.get('idNumber') as string) || null
+    const rawId = String((formData.get('idNumber') as string) || '').replace(/\s+/g, '')
+    // Only the last 4 characters are kept, so a database leak cannot expose a full ID number.
+    const idNumber = rawId ? `****${rawId.slice(-4)}` : null
 
     const hash = await bcrypt.hash(password, 12)
 

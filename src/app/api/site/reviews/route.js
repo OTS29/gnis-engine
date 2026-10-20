@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { sameOrigin } from '@/lib/security';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
 // The owner's reviews. Owners can hide a review from their page, but cannot edit what a customer wrote.
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const rows = await sql`select r.id, r.customer, r.rating, r.comment, r.hidden,
         to_char(r.created_at at time zone 'Europe/London', 'YYYY-MM-DD') as created
@@ -24,7 +24,7 @@ export async function GET(req) {
 export async function PUT(req) {
   try {
     if (!sameOrigin(req)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 403 });
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const b = await req.json();
     const [u] = await sql`update site_reviews r set hidden = ${!!b.hidden} from sites st

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { sameOrigin } from '@/lib/security';
 import { hit } from '@/lib/rateLimit';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
@@ -14,7 +14,7 @@ const isPhone = (s) => /^\+?[\d\s()-]{7,20}$/.test(s);
 export async function POST(req) {
   try {
     if (!sameOrigin(req)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 403 });
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     if (!(await hit(`import:${s.userId}`, 20, 3600)).allowed) return NextResponse.json({ ok: false, error: 'Too many imports. Try again later.' }, { status: 429 });
     const b = await req.json();

@@ -1,9 +1,9 @@
 import { sql } from '@/lib/db';
-import { getSession } from '@/lib/session';
+import { liveSession } from '@/lib/session';
 
 // Admin only. The role is re-checked in the database, so a removed admin loses access straight away.
 export async function requireAdmin(req) {
-  const s = getSession(req);
+  const s = await liveSession(req);
   if (!s || !s.userId) return null;
   try {
     const [u] = await sql`select id, email, role from users where id = ${s.userId}`;

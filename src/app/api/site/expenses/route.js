@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { planOfUser, limitsFor } from '@/lib/plans';
 import { sameOrigin } from '@/lib/security';
 import { hit } from '@/lib/rateLimit';
@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 
 async function owner(req) {
   if (!sameOrigin(req)) return { err: NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 403 }) };
-  const s = getSession(req);
+  const s = await liveSession(req);
   if (!isOwnerRole(s)) return { err: NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 }) };
   if (!limitsFor(await planOfUser(s.userId)).finance) return { err: NextResponse.json({ ok: false, error: 'Expenses and profit are a Professional plan feature.' }, { status: 402 }) };
   if (!(await hit(`exp:${s.userId}`, 300, 3600)).allowed) return { err: NextResponse.json({ ok: false, error: 'Too many changes. Try again later.' }, { status: 429 }) };

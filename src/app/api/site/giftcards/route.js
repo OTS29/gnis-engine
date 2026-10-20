@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { sameOrigin } from '@/lib/security';
-import { getSession, isOwnerRole } from '@/lib/session';
+import { liveSession, isOwnerRole } from '@/lib/session';
 import { normCode } from '@/lib/giftcards';
 
 export const runtime = 'nodejs';
@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 // The owner's gift cards: list them, and use up some balance when a customer pays with one.
 export async function GET(req) {
   try {
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const rows = await sql`select g.id, g.code, g.amount::float8 as amount, g.balance::float8 as balance, g.currency, g.buyer_name, g.buyer_email,
         g.recipient_name, g.recipient_email, g.status,
@@ -26,7 +26,7 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     if (!sameOrigin(req)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 403 });
-    const s = getSession(req);
+    const s = await liveSession(req);
     if (!isOwnerRole(s)) return NextResponse.json({ ok: false, error: 'Not allowed' }, { status: 401 });
     const b = await req.json();
     const code = normCode(b.code);
