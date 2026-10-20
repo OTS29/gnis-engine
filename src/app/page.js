@@ -914,7 +914,7 @@ export default function LandingPage() {
 
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] text-center">
-            © 2026 {businessName} <a href="https://cleanit-website.vercel.app/" target="_blank" rel="noopener noreferrer" aria-label="Our cleaning service" style={{ color: 'inherit', textDecoration: 'none', cursor: 'default' }}>•</a> London
+            © 2026 {businessName} • London
           </div>
           <div className="flex gap-6 text-slate-500 text-[10px] font-black uppercase tracking-widest">
             <a href="/privacy" className="hover:text-white">Privacy</a>

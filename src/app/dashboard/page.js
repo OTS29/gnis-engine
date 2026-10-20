@@ -469,7 +469,6 @@ export default function Dashboard() {
           {msg && <span style={{ fontSize: 13 }}>{msg}</span>}
           {isAdmin && <a href="/admin" style={{ fontSize: 14, color: '#7c3aed', fontWeight: 600 }}>Admin console</a>}
           {slug && <a href={`/site/${slug}`} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: '#2563eb' }}>View live site ↗</a>}
-          {isAdmin && <a href="https://cleanit-website.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, color: '#059669', fontWeight: 600 }}>Clean It website ↗</a>}
           <button style={btn('#2563eb')} onClick={save} disabled={saving || tooBig}>{saving ? 'Saving…' : 'Save'}</button>
           <form action={logout}><button style={btn('#6b7280')}>Log out</button></form>
         </div>
