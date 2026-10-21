@@ -7,7 +7,7 @@ import { login, signup, logout } from './auth/action';
 import { REGIONS, REGION_ORDER, AFRICA, ID_METHODS, regionFor, guessRegion, money, symbolOf, scalePrice, planPrices } from '@/lib/regions';
 
 // Set to true after you add public/demo.mp4
-const SHOW_VIDEO = false;
+const SHOW_VIDEO = true;
 
 const CATEGORIES = ['All', 'Beauty & Hair', 'Home Services', 'Trades', 'Health & Wellness', 'Education & Tutoring', 'Creative & Media', 'Business Services', 'Events & Catering', 'Tech & Digital', 'Transport & Delivery'];
 
@@ -504,6 +504,24 @@ export default function LandingPage() {
           <button type="submit" className="bg-green-600 hover:bg-green-500 text-white px-5 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest transition shrink-0">Search</button>
         </form>
 
+             {/* --- VIDEO (enable with SHOW_VIDEO at top of file) --- */}
+      {SHOW_VIDEO && (
+        <section id="how-it-works" className="py-20 max-w-6xl mx-auto px-5 sm:px-6">
+          <div className="relative rounded-[2rem] sm:rounded-[3.5rem] overflow-hidden shadow-2xl border-4 border-gray-100 dark:border-slate-900 bg-black aspect-video">
+            <video ref={videoRef} className="w-full h-full object-cover" autoPlay loop muted playsInline preload="auto" onClick={(e) => (e.currentTarget.paused ? e.currentTarget.play() : e.currentTarget.pause())}>
+              <source src="/gnis-ad-4.mp4" type="video/mp4" />
+            </video>
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end justify-between gap-3 p-6 md:p-10 pointer-events-none">
+              <h3 className="text-2xl md:text-4xl font-black italic uppercase tracking-tighter text-white">See GNIS in action</h3>
+              <div className="flex gap-2 pointer-events-auto">
+                <button onClick={() => { const v = videoRef.current; if (v) (v.paused ? v.play() : v.pause()); }} className="bg-black/70 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-full hover:bg-green-600 transition">Pause / Play</button>
+                <button onClick={() => { const v = videoRef.current; if (v) v.muted = !v.muted; }} className="bg-black/70 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-full hover:bg-green-600 transition">Sound on / off</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
         {stats && (
           <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto text-left">
             {[
@@ -744,22 +762,7 @@ export default function LandingPage() {
         )}
       </section>
 
-      {/* --- VIDEO (enable with SHOW_VIDEO at top of file) --- */}
-      {SHOW_VIDEO && (
-        <section className="py-20 max-w-6xl mx-auto px-5 sm:px-6">
-          <div className="relative rounded-[2rem] sm:rounded-[3.5rem] overflow-hidden shadow-2xl border-4 border-gray-100 dark:border-slate-900 bg-black aspect-video">
-            <video ref={videoRef} className="w-full h-full object-cover opacity-80" autoPlay loop muted playsInline>
-              <source src="/demo.mp4" type="video/mp4" />
-            </video>
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-6 md:p-14">
-              <div className="text-white">
-                <h3 className="text-2xl md:text-4xl font-black italic uppercase tracking-tighter">See GNIS in action</h3>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
+      z
       {/* --- SAMPLE STORIES --- */}
       <section className="py-16 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-y border-slate-900 overflow-hidden text-white">
         <div className="max-w-4xl mx-auto px-5 sm:px-6 text-center">
