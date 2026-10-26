@@ -467,6 +467,8 @@ export default function Dashboard() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: tooBig ? '#dc2626' : '#6b7280' }}>{sizeKB} KB / 3800</span>
           {msg && <span style={{ fontSize: 13 }}>{msg}</span>}
+          <a href="/ai" style={{ fontSize: 14, color: '#059669', fontWeight: 600 }}>AI Studio</a>
+          <a href="/simulator" style={{ fontSize: 14, color: '#059669', fontWeight: 600 }}>Simulator</a>
           {isAdmin && <a href="/admin" style={{ fontSize: 14, color: '#7c3aed', fontWeight: 600 }}>Admin console</a>}
           {slug && <a href={`/site/${slug}`} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: '#2563eb' }}>View live site ↗</a>}
           <button style={btn('#2563eb')} onClick={save} disabled={saving || tooBig}>{saving ? 'Saving…' : 'Save'}</button>
