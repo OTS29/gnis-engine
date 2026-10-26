@@ -1,0 +1,4 @@
+Add these two links on your landing page (src/app/page.js), for example next to your other nav or footer links:
+
+  <a href="/simulator" className="text-slate-300 hover:text-white">Business simulator</a>
+  <a href="/ai" className="text-slate-300 hover:text-white">AI Studio</a>
