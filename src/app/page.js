@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { splitQuery } from '@/lib/searchTerms';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { gsap } from 'gsap';
@@ -129,6 +130,10 @@ export default function LandingPage() {
   const [dir, setDir] = useState({ items: [], countries: [], hasMore: false, loading: true });
   const [dirQ, setDirQ] = useState('');
   const [dirQLive, setDirQLive] = useState('');
+  const [whereLive, setWhereLive] = useState('');
+  const [dirWhere, setDirWhere] = useState('');
+  const [sugFocus, setSugFocus] = useState('');
+  const [sug, setSug] = useState({ kind: '', items: [] });
   const [dirCountry, setDirCountry] = useState('');
   const [dirPage, setDirPage] = useState(0);
 
@@ -165,24 +170,49 @@ export default function LandingPage() {
   }, [stats]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { const t = setTimeout(() => { setDirQ(dirQLive.trim()); setDirPage(0); }, 350); return () => clearTimeout(t); }, [dirQLive]);
+  useEffect(() => { const t = setTimeout(() => { setDirWhere(whereLive.trim()); setDirPage(0); }, 350); return () => clearTimeout(t); }, [whereLive]);
+
+  // Ideas that pop up under the search boxes while the person types.
+  useEffect(() => {
+    if (!sugFocus) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const q = sugFocus === 'what' ? dirQLive : whereLive;
+        const j = await (await fetch(`/api/public/suggest?kind=${sugFocus}&q=${encodeURIComponent(q.trim())}`)).json();
+        if (alive) setSug({ kind: sugFocus, items: j.items || [] });
+      } catch {}
+    }, 180);
+    return () => { alive = false; clearTimeout(t); };
+  }, [sugFocus, dirQLive, whereLive]);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       setDir((d) => ({ ...d, loading: true }));
       try {
-        const j = await (await fetch(`/api/public/directory?q=${encodeURIComponent(dirQ)}&country=${encodeURIComponent(dirCountry)}&page=${dirPage}`)).json();
+        const j = await (await fetch(`/api/public/directory?q=${encodeURIComponent(dirQ)}&where=${encodeURIComponent(dirWhere)}&country=${encodeURIComponent(dirCountry)}&page=${dirPage}`)).json();
         if (!alive) return;
         setDir((d) => ({ items: dirPage > 0 ? [...d.items, ...(j.items || [])] : (j.items || []), countries: j.countries || d.countries, hasMore: !!j.hasMore, loading: false }));
       } catch { if (alive) setDir((d) => ({ ...d, loading: false })); }
     })();
     return () => { alive = false; };
-  }, [dirQ, dirCountry, dirPage]);
+  }, [dirQ, dirWhere, dirCountry, dirPage]);
 
   const countryName = (code) => { try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code; } catch { return code; } };
+  const pickSuggestion = (kind, text) => {
+    if (kind === 'where') { setWhereLive(text); setDirWhere(text); } else { setDirQLive(text); setDirQ(text); }
+    setDirPage(0); setSugFocus('');
+    const el = document.getElementById('marketplace-feed');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const goSearch = (e) => {
     if (e) e.preventDefault();
-    setDirQ(dirQLive.trim()); setDirPage(0);
+    // "plumber in lagos" typed in one box is split into what and where.
+    const sp = splitQuery(dirQLive);
+    const w = whereLive.trim() || sp.where;
+    if (sp.where) { setDirQLive(sp.what); if (!whereLive.trim()) setWhereLive(sp.where); }
+    setDirQ(sp.what.trim()); setDirWhere(w); setDirPage(0); setSugFocus('');
     const el = document.getElementById('marketplace-feed');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -464,16 +494,38 @@ export default function LandingPage() {
         </div>
 
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
-          <form onSubmit={goSearch} role="search" className="flex items-center gap-1.5 rounded-xl border border-green-700/60 bg-white/10 p-1 focus-within:ring-2 focus-within:ring-green-300/50">
-            <input
-              type="search"
-              value={dirQLive}
-              onChange={(e) => setDirQLive(e.target.value)}
-              placeholder="Search professions, businesses or places"
-              aria-label="Search professions and businesses"
-              className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm font-semibold text-white outline-none placeholder:text-green-200/70"
-            />
-            <button type="submit" className="shrink-0 rounded-lg bg-amber-400 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-emerald-950 transition hover:bg-amber-300">Search</button>
+          <form onSubmit={goSearch} role="search" className="grid grid-cols-[1fr_1fr_auto] gap-1.5 rounded-xl border border-green-700/60 bg-white/10 p-1 focus-within:ring-2 focus-within:ring-green-300/50">
+            {[
+              { kind: 'what', value: dirQLive, set: setDirQLive, ph: 'What? e.g. salon', label: 'What are you looking for' },
+              { kind: 'where', value: whereLive, set: setWhereLive, ph: 'Where? e.g. London', label: 'Where' },
+            ].map((f) => (
+              <div key={f.kind} className="relative min-w-0">
+                <input
+                  type="search"
+                  value={f.value}
+                  onChange={(e) => f.set(e.target.value)}
+                  onFocus={() => setSugFocus(f.kind)}
+                  onBlur={() => setTimeout(() => setSugFocus((c) => (c === f.kind ? '' : c)), 150)}
+                  placeholder={f.ph}
+                  aria-label={f.label}
+                  autoComplete="off"
+                  className="w-full min-w-0 bg-transparent px-3 py-2 text-sm font-semibold text-white outline-none placeholder:text-green-200/70"
+                />
+                {sugFocus === f.kind && sug.kind === f.kind && sug.items.length > 0 && (
+                  <ul role="listbox" className="absolute left-0 top-full z-50 mt-2 max-h-80 w-[min(22rem,calc(100vw-2rem))] overflow-auto rounded-xl border border-slate-700 bg-slate-950 p-1 text-white shadow-2xl">
+                    {sug.items.map((it, i) => (
+                      <li key={`${it.type}-${it.text}-${i}`} role="option">
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(f.kind, it.text); }} className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-slate-800">
+                          <span className="min-w-0 truncate">{it.text}{it.sub ? <span className="ml-2 text-xs font-normal text-slate-400">{it.sub}</span> : null}</span>
+                          <span className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-green-300">{it.type === 'place' ? 'Place' : it.type === 'business' ? 'Business' : 'Trade'}{it.count ? ` · ${it.count}` : ''}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+            <button type="submit" className="shrink-0 rounded-lg bg-amber-400 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-emerald-950 transition hover:bg-amber-300 sm:px-4">Search</button>
           </form>
         </div>
 
@@ -763,6 +815,13 @@ export default function LandingPage() {
           </div>
         </div>
 
+        {(dirQ || dirWhere) && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {dirQ && (<button onClick={() => { setDirQLive(''); setDirQ(''); setDirPage(0); }} className="rounded-full border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-[11px] font-bold text-green-400">{dirQ} ✕</button>)}
+            {dirWhere && (<button onClick={() => { setWhereLive(''); setDirWhere(''); setDirPage(0); }} className="rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-[11px] font-bold text-amber-300">in {dirWhere} ✕</button>)}
+          </div>
+        )}
+
         {dir.countries.length > 1 && (
           <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide">
             <button onClick={() => { setDirCountry(''); setDirPage(0); }} className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider border transition ${dirCountry === '' ? 'bg-green-600 border-green-500 text-white' : 'border-slate-800 text-slate-400 hover:border-green-500'}`}>All places</button>
@@ -778,8 +837,9 @@ export default function LandingPage() {
           <p className="text-sm text-slate-500 py-10 text-center">Loading businesses…</p>
         ) : dir.items.length === 0 ? (
           <div className="bg-slate-900/30 rounded-[2rem] p-10 text-center border border-slate-800 max-w-xl mx-auto">
-            <p className="text-xl font-black italic text-slate-400 mb-2 uppercase tracking-tight">{dirQ || dirCountry ? 'No matches' : 'Be one of the first listed'}</p>
-            <p className="text-[11px] text-slate-500 font-bold tracking-wide mb-6">{dirQ || dirCountry ? 'Try a different word or place.' : 'Businesses appear here as soon as they publish their GNIS page.'}</p>
+            <p className="text-xl font-black italic text-slate-400 mb-2 uppercase tracking-tight">{dirQ || dirWhere || dirCountry ? (dirWhere ? `No matches in ${dirWhere} yet` : 'No matches') : 'Be one of the first listed'}</p>
+            <p className="text-[11px] text-slate-500 font-bold tracking-wide mb-6">{dirQ || dirWhere || dirCountry ? 'Try a different word or place, or search everywhere.' : 'Businesses appear here as soon as they publish their GNIS page.'}</p>
+            {dirWhere && (<button onClick={() => { setWhereLive(''); setDirWhere(''); setDirPage(0); }} className="mb-3 mr-2 border border-green-500/50 text-green-400 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-500/10 transition">Search everywhere</button>)}
             <button onClick={() => openRegister('pro')} className="bg-green-600 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-500 transition">List your business free</button>
           </div>
         ) : (

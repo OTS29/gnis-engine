@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { getTop } from '@/lib/leaderboard';
+import { splitQuery, whatPattern, wherePattern, countryFromName } from '@/lib/searchTerms';
 
 export const runtime = 'nodejs';
 
@@ -13,7 +14,12 @@ export async function GET(req) {
     const q = cleanQ(u.searchParams.get('q'));
     const country = String(u.searchParams.get('country') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
     const page = Math.max(0, Math.min(50, parseInt(u.searchParams.get('page') || '0', 10) || 0));
-    const like = `%${q}%`;
+    // "plumber in lagos" typed in one box is split into what + where. A separate where= box also works.
+    const parts = splitQuery(q);
+    const whereRaw = cleanQ(u.searchParams.get('where')) || parts.where;
+    const pat = whatPattern(parts.what);
+    const wpat = wherePattern(whereRaw);
+    const wcountry = countryFromName(whereRaw);
 
     const rows = await sql`select s.slug, s.data->>'businessName' as name, s.data->>'tagline' as tagline, s.data->>'location' as location,
         s.data->>'currency' as currency, s.data->>'hero' as hero,
@@ -26,10 +32,13 @@ export async function GET(req) {
       where s.published and coalesce(u.suspended, false) = false
         and (${country} = '' or upper(coalesce(u.country, '')) = ${country}
              or (${country} in ('GB', 'UK') and upper(coalesce(u.country, '')) in ('GB', 'UK')))
-        and (${q} = '' or s.data->>'businessName' ilike ${like} or s.data->>'location' ilike ${like}
-             or s.data->>'tagline' ilike ${like} or coalesce(u.skill, '') ilike ${like}
+        and (${pat} = '' or s.data->>'businessName' ~* ${pat} or s.data->>'location' ~* ${pat}
+             or s.data->>'tagline' ~* ${pat} or coalesce(u.skill, '') ~* ${pat}
              or exists (select 1 from jsonb_array_elements(case when jsonb_typeof(s.data->'services') = 'array' then s.data->'services' else '[]'::jsonb end) sv
-                        where sv->>'name' ilike ${like}))
+                        where sv->>'name' ~* ${pat}))
+        and (${wpat} = '' or s.data->>'location' ~* ${wpat}
+             or (${wcountry} <> '' and (upper(coalesce(u.country, '')) = ${wcountry}
+                 or (${wcountry} = 'GB' and upper(coalesce(u.country, '')) = 'UK'))))
       order by bookings desc, s.updated_at desc
       limit 13 offset ${page * 12}`;
 
