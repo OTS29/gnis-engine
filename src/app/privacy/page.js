@@ -20,6 +20,7 @@ export default function Privacy() {
         <li><b>Customers of a seller:</b> name, phone or email, the service or items chosen, booking date and time, price, order details.</li>
         <li><b>Visitors:</b> a one-way daily hash of IP address and browser type, used only to count visits. It cannot be reversed and sets no cookie.</li>
         <li><b>Payments:</b> card details are entered on Stripe's pages. We never see or store them.</li>
+        <li><b>Waiting list ("Book for family back home"):</b> your email, whether you are a customer or a professional, the countries you chose and an optional note. We use it only to tell you when the feature opens. You can ask us to remove you at any time.</li>
       </ul>
 
       <h2 style={h2}>Why we use it, and our legal basis</h2>
