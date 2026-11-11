@@ -412,6 +412,7 @@ export default function LandingPage() {
               <a href="#marketplace-feed" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Marketplace</a>
               <a href="#pricing" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Pricing</a>
               <a href="/simulator" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Simulator</a>
+              <a href="/family" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Family bookings</a>
               {currentUser && <a href="/ai" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">AI Studio</a>}
             </div>
           </div>
@@ -923,6 +924,7 @@ export default function LandingPage() {
           </div>
           <div className="flex gap-6 text-slate-500 text-[10px] font-black uppercase tracking-widest">
             <a href="/simulator" className="hover:text-white">Business simulator</a>
+            <a href="/family" className="hover:text-white">Family bookings (coming soon)</a>
             <a href="/ai" className="hover:text-white">AI Studio</a>
             <a href="/privacy" className="hover:text-white">Privacy</a>
             <a href="/terms" className="hover:text-white">Terms</a>
