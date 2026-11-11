@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { splitQuery } from '@/lib/searchTerms';
+import SponsoredStrip from './SponsoredStrip';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { gsap } from 'gsap';
@@ -814,6 +815,8 @@ export default function LandingPage() {
             {dirQLive && (<button onClick={() => setDirQLive('')} className="text-slate-500 hover:text-white text-[10px] font-mono px-2">✕</button>)}
           </div>
         </div>
+
+        <SponsoredStrip />
 
         {(dirQ || dirWhere) && (
           <div className="flex flex-wrap items-center gap-2 mb-4">
