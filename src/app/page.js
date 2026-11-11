@@ -390,6 +390,14 @@ export default function LandingPage() {
         }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes familyGlow {
+          0%, 100% { box-shadow: 0 0 6px 1px rgba(251, 191, 36, 0.45); }
+          50% { box-shadow: 0 0 20px 6px rgba(251, 191, 36, 0.85); }
+        }
+        .family-glow { animation: familyGlow 2.2s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .family-glow { animation: none; box-shadow: 0 0 10px 2px rgba(251, 191, 36, 0.6); }
+        }
       `}</style>
 
       {/* --- ANNOUNCEMENT BAR --- */}
@@ -399,21 +407,21 @@ export default function LandingPage() {
       </div>
 
       {/* --- NAVIGATION --- */}
-      <nav className="sticky top-0 z-50 glass border-b border-gray-200 dark:border-slate-900 w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
+      <nav className="sticky top-0 z-50 w-full border-b border-green-800/60 bg-gradient-to-r from-emerald-950 via-green-900 to-emerald-950 shadow-lg shadow-green-950/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center text-white">
           <div className="flex items-center gap-8">
-            <h1 className="text-2xl sm:text-3xl font-black text-green-600 tracking-tighter italic">GNIS</h1>
+            <h1 className="text-2xl sm:text-3xl font-black text-green-300 tracking-tighter italic">GNIS</h1>
             <div className="hidden md:flex items-center gap-6">
               {!currentUser && (
-                <button onClick={() => openRegister('pro')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Register as Pro</button>
+                <button onClick={() => openRegister('pro')} className="text-[10px] font-black uppercase tracking-widest text-green-100 hover:text-white transition">Register as Pro</button>
               )}
-              <a href="#who-its-for" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Who it's for</a>
-              <a href="#services-matrix" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Builder</a>
-              <a href="#marketplace-feed" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Marketplace</a>
-              <a href="#pricing" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Pricing</a>
-              <a href="/simulator" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Simulator</a>
-              <a href="/family" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">Family bookings</a>
-              {currentUser && <a href="/ai" className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-green-500 transition">AI Studio</a>}
+              <a href="#who-its-for" className="text-[10px] font-black uppercase tracking-widest text-green-100 hover:text-white transition">Who it's for</a>
+              <a href="#services-matrix" className="text-[10px] font-black uppercase tracking-widest text-green-100 hover:text-white transition">Builder</a>
+              <a href="#marketplace-feed" className="text-[10px] font-black uppercase tracking-widest text-green-100 hover:text-white transition">Marketplace</a>
+              <a href="#pricing" className="text-[10px] font-black uppercase tracking-widest text-green-100 hover:text-white transition">Pricing</a>
+              <a href="/simulator" className="text-[10px] font-black uppercase tracking-widest text-green-100 hover:text-white transition">Simulator</a>
+              <a href="/family" className="family-glow inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-950 hover:from-amber-300 hover:to-orange-400 transition"><span className="rounded-full bg-emerald-950 px-1.5 py-0.5 text-[8px] text-amber-300">NEW</span>Family bookings</a>
+              {currentUser && <a href="/ai" className="text-[10px] font-black uppercase tracking-widest text-green-100 hover:text-white transition">AI Studio</a>}
             </div>
           </div>
 
@@ -422,7 +430,7 @@ export default function LandingPage() {
               {currentUser ? (
                 <>
                   <div className="text-right">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Signed in</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-green-300">Signed in</p>
                     <p className="text-xs font-bold uppercase italic">{currentUser.name}</p>
                   </div>
                   <Link href={currentUser.role === 'client' ? '/portal/bookings' : '/dashboard'} className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] tracking-widest uppercase hover:bg-green-500 transition">Dashboard</Link>
@@ -455,12 +463,29 @@ export default function LandingPage() {
           </div>
         </div>
 
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
+          <form onSubmit={goSearch} role="search" className="flex items-center gap-1.5 rounded-xl border border-green-700/60 bg-white/10 p-1 focus-within:ring-2 focus-within:ring-green-300/50">
+            <input
+              type="search"
+              value={dirQLive}
+              onChange={(e) => setDirQLive(e.target.value)}
+              placeholder="Search professions, businesses or places"
+              aria-label="Search professions and businesses"
+              className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm font-semibold text-white outline-none placeholder:text-green-200/70"
+            />
+            <button type="submit" className="shrink-0 rounded-lg bg-amber-400 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-emerald-950 transition hover:bg-amber-300">Search</button>
+          </form>
+        </div>
+
         {menuOpen && (
           <div className="md:hidden border-t border-slate-800 px-4 py-4 space-y-1 bg-slate-950/95 text-white">
             <a href="#who-its-for" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">Who it's for</a>
             <a href="#services-matrix" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">Builder</a>
             <a href="#marketplace-feed" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">Marketplace</a>
             <a href="#pricing" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">Pricing</a>
+            <a href="/simulator" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">Simulator</a>
+            <a href="/family" onClick={() => setMenuOpen(false)} className="family-glow my-2 flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-3 py-2.5 text-xs font-black uppercase tracking-widest text-emerald-950"><span className="rounded-full bg-emerald-950 px-1.5 py-0.5 text-[8px] text-amber-300">NEW</span>Family bookings</a>
+            {currentUser && <a href="/ai" onClick={() => setMenuOpen(false)} className="block text-xs font-black uppercase tracking-widest py-2.5">AI Studio</a>}
             <select value={region} onChange={(e) => changeRegion(e.target.value)} aria-label="Country and currency" className="block w-full mt-2 mb-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-white">
               {REGION_ORDER.map(k => (<option key={k} value={k}>{REGIONS[k].flag} {REGIONS[k].name} ({REGIONS[k].currency})</option>))}
             </select>
@@ -545,6 +570,29 @@ export default function LandingPage() {
         )}
         {stats && <p className="mt-3 text-[10px] font-mono uppercase tracking-widest text-slate-500">Live numbers. Updated automatically.</p>}
       </header>
+
+      {/* --- FAMILY BOOKINGS (coming soon) --- */}
+      <section id="family" className="px-5 sm:px-6 py-14">
+        <div className="family-glow max-w-6xl mx-auto rounded-3xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 p-[2px]">
+          <div className="grid items-center gap-8 rounded-[22px] bg-slate-950 p-7 text-white sm:p-10 md:grid-cols-2">
+            <div>
+              <span className="inline-block rounded-full bg-amber-400 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-950">Coming soon · waiting list open</span>
+              <h3 className="mt-4 text-3xl font-black uppercase italic tracking-tighter sm:text-4xl">Book for family back home</h3>
+              <p className="mt-4 text-sm leading-relaxed text-slate-300">Living abroad? Book and pay for a trusted professional in Nigeria to do a job for a family member. The money is held until the job is confirmed with a one-time code.</p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <a href="/family" className="rounded-2xl bg-amber-400 px-6 py-3 text-xs font-black uppercase tracking-widest text-emerald-950 transition hover:bg-amber-300">Join the waiting list</a>
+                <span className="text-[11px] text-slate-400">Test version only. No real payments are taken yet.</span>
+              </div>
+            </div>
+            <ol className="space-y-3 text-sm">
+              <li className="flex items-start gap-3 rounded-2xl bg-white/5 p-4"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400 text-xs font-black text-emerald-950">1</span>You book, and your payment is held, not paid out.</li>
+              <li className="flex items-start gap-3 rounded-2xl bg-white/5 p-4"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400 text-xs font-black text-emerald-950">2</span>The professional takes before and after photos with the in-app camera.</li>
+              <li className="flex items-start gap-3 rounded-2xl bg-white/5 p-4"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400 text-xs font-black text-emerald-950">3</span>Your family member gets a one-time code.</li>
+              <li className="flex items-start gap-3 rounded-2xl bg-white/5 p-4"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400 text-xs font-black text-emerald-950">4</span>They share it only if they are happy, and the professional is paid.</li>
+            </ol>
+          </div>
+        </div>
+      </section>
 
       {/* --- WHO IT'S FOR --- */}
       <section id="who-its-for" className="py-20 max-w-6xl mx-auto px-5 sm:px-6">
