@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { splitQuery } from '@/lib/searchTerms';
 import SponsoredStrip from './SponsoredStrip';
+import FamilyProsStrip from './FamilyProsStrip';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { gsap } from 'gsap';
@@ -645,6 +646,7 @@ export default function LandingPage() {
             </ol>
           </div>
         </div>
+        <FamilyProsStrip />
       </section>
 
       {/* --- WHO IT'S FOR --- */}

@@ -33,6 +33,11 @@ export function Shell({ title, children }) {
   else body = children(st);
   return (
     <main className="min-h-screen bg-slate-950 text-white">
+      <style>{`
+        @keyframes familyGlow { 0%, 100% { box-shadow: 0 0 6px 1px rgba(251,191,36,.45); } 50% { box-shadow: 0 0 18px 5px rgba(251,191,36,.85); } }
+        .family-glow { animation: familyGlow 2.2s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .family-glow { animation: none; box-shadow: 0 0 10px 2px rgba(251,191,36,.6); } }
+      `}</style>
       <div className="max-w-3xl mx-auto px-5 sm:px-6 py-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="text-green-500 font-black italic text-2xl tracking-tighter">GNIS</Link>

@@ -16,6 +16,7 @@ function List() {
         <div key={p.slug} className={card}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
+              <span className="family-glow inline-block mb-2 rounded-full bg-amber-400 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-950">Family-ready</span>
               <p className="text-lg font-bold">{p.name}</p>
               <p className="text-sm text-slate-400">{p.location}{p.tagline ? ` · ${p.tagline}` : ''}</p>
             </div>

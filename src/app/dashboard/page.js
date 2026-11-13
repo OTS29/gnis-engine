@@ -91,6 +91,30 @@ export default function Dashboard() {
   const [tab, setTab] = useState('design');
   // The Advertise link only appears once adverts are switched on for this person (the page answers 404 until then).
   const [adsOn, setAdsOn] = useState(false);
+  // Family bookings: new requests for this business show as a badge and a small pop-up. Hidden until the feature is open for this person.
+  const [fam, setFam] = useState(null);
+  const [famSeen, setFamSeen] = useState([]);
+  useEffect(() => {
+    try { setFamSeen(JSON.parse(localStorage.getItem('gnis_fam_seen') || '[]')); } catch {}
+    let alive = true;
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/family/inbox');
+        if (!r.ok) { if (alive) setFam(null); return; }
+        const j = await r.json();
+        if (alive && j.ok) setFam(j);
+      } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+  const famNew = fam ? fam.requests.filter((x) => !famSeen.includes(x.id)) : [];
+  const dismissFam = () => {
+    const ids = [...new Set([...famSeen, ...(fam?.requests || []).map((x) => x.id)])].slice(-200);
+    setFamSeen(ids);
+    try { localStorage.setItem('gnis_fam_seen', JSON.stringify(ids)); } catch {}
+  };
   useEffect(() => { fetch('/api/ads').then((r) => { if (r.ok) setAdsOn(true); }).catch(() => {}); }, []);
   const [template, setTemplate] = useState('classic');
   const [data, setData] = useState(mergeData(DEFAULT_DATA));
@@ -463,8 +487,23 @@ export default function Dashboard() {
         .dash input::placeholder,.dash textarea::placeholder{color:#9ca3af !important;-webkit-text-fill-color:#9ca3af}
         .dash *{min-width:0}
         .dash img{max-width:100%}
+        @keyframes famPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.55)}50%{box-shadow:0 0 0 7px rgba(220,38,38,0)}}
+        @media (prefers-reduced-motion: reduce){ .fam-toast *{animation:none !important} }
       `}</style>
       <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onFile} />
+      {famNew.length > 0 && (
+        <div className="fam-toast" role="status" aria-live="polite" style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 60, width: 'min(340px, calc(100vw - 32px))', background: '#052e16', color: '#fff', borderRadius: 14, padding: 16, boxShadow: '0 12px 40px rgba(0,0,0,.35)', border: '1px solid #fbbf24' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 999, background: '#fbbf24', animation: 'famPulse 1.8s ease-in-out infinite' }} />
+            <strong style={{ fontSize: 14 }}>{famNew.length === 1 ? 'New family booking request' : `${famNew.length} new family booking requests`}</strong>
+          </div>
+          <p style={{ margin: '8px 0 0', fontSize: 13, color: '#d1fae5' }}>{famNew[0].service} on {famNew[0].date} at {famNew[0].time}. Reply before {new Date(famNew[0].respond_by || famNew[0].respondBy).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.</p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <a href={famNew.length === 1 ? `/family/jobs/${famNew[0].id}` : '/family/jobs'} onClick={dismissFam} style={{ background: '#fbbf24', color: '#052e16', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 800, textDecoration: 'none' }}>Accept or decline</a>
+            <button onClick={dismissFam} style={{ background: 'transparent', color: '#d1fae5', border: '1px solid #065f46', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}>Later</button>
+          </div>
+        </div>
+      )}
       <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 5 }}>
         <strong>My site</strong>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -473,6 +512,12 @@ export default function Dashboard() {
           <a href="/ai" style={{ fontSize: 14, color: '#059669', fontWeight: 600 }}>AI Studio</a>
           <a href="/simulator" style={{ fontSize: 14, color: '#059669', fontWeight: 600 }}>Simulator</a>
           {adsOn && <a href="/dashboard/ads" style={{ fontSize: 14, color: '#059669', fontWeight: 600 }}>Advertise</a>}
+          {fam && (
+            <a href="/family/jobs" style={{ fontSize: 14, color: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              Family jobs
+              {fam.total > 0 && <span aria-label={`${fam.total} waiting`} style={{ background: '#dc2626', color: '#fff', borderRadius: 999, minWidth: 20, height: 20, padding: '0 6px', fontSize: 12, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', animation: fam.requests.length ? 'famPulse 1.8s ease-in-out infinite' : 'none' }}>{fam.total}</span>}
+            </a>
+          )}
           {isAdmin && <a href="/admin" style={{ fontSize: 14, color: '#7c3aed', fontWeight: 600 }}>Admin console</a>}
           {slug && <a href={`/site/${slug}`} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: '#2563eb' }}>View live site ↗</a>}
           <button style={btn('#2563eb')} onClick={save} disabled={saving || tooBig}>{saving ? 'Saving…' : 'Save'}</button>

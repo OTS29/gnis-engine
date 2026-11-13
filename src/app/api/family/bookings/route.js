@@ -3,6 +3,7 @@ import { hit } from '@/lib/rateLimit';
 import { guard, json } from '@/lib/familyGuard';
 import { validateBooking, TERMS_VERSION } from '@/lib/familyFlow';
 import { expireStale, logEvent } from '@/lib/familyDb';
+import { notifyProOfRequest } from '@/lib/familyNotify';
 
 export const runtime = 'nodejs';
 
@@ -44,5 +45,7 @@ export async function POST(req) {
       ${v.value.name}, ${v.value.phone}, ${v.value.area}, ${v.value.date}::date, ${v.value.time}, ${v.value.notes}, ${g.mode !== 'live'}, ${TERMS_VERSION}, now(), true, now() + interval '24 hours')
     returning id`;
   await logEvent(made.id, 'sender', g.user.id, 'requested', { service: v.value.service, category: v.value.category, test: g.mode !== 'live' });
+  // A failed email must never lose the booking.
+  try { await notifyProOfRequest(made.id); } catch (e) { console.error('FAMILY_NOTIFY_FAULT:', e?.message); }
   return json({ ok: true, id: made.id }, 201);
 }
